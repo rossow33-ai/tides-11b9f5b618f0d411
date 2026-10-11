@@ -119,3 +119,21 @@ html.locked header,html.locked main,html.locked nav,html.locked #drawer,html.loc
 
 /* v21 tabs: Wind tab hosts #tide */
 #tide{display:none;padding-bottom:calc(env(safe-area-inset-bottom) + 80px)}html.wind header,html.wind main{display:none!important}nav#tabs{z-index:95}#scrim{z-index:96}#drawer{z-index:97}
+
+/* v23 sky theme (matches wind screen) */
+:root{--bg:#0A4D9C;--card:rgba(255,255,255,.09);--card2:rgba(255,255,255,.15);--line:rgba(255,255,255,.2);--tx:#fff;--mu:#cfe6ff;--ac:#b5e3ff;--ac2:#8FD3FF;--warn:#FFD166;--bad:#ffcaca;--ok:#9af0b8}
+html,body{background:#062b57}body{background:linear-gradient(180deg,#0A4D9C 0%,#083a76 55%,#062b57 100%) fixed;min-height:100vh}
+header{background:#0A4D9C}
+nav,nav#tabs{background:rgba(6,43,87,.96);border-top:1px solid rgba(255,255,255,.15);backdrop-filter:blur(8px)}
+nav button{color:#cfe6ff}nav button.on{color:#fff;font-weight:700}
+.btn,.btn{background:linear-gradient(135deg,#8FD3FF,#7cc4ff);color:#062b57}
+.btn.ghost{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.25)}
+.btn.danger{background:rgba(120,20,30,.45);color:#ffd0d0;border:1px solid rgba(255,160,160,.4)}
+input,select,textarea{background:rgba(3,25,55,.45);color:#fff;border:1px solid rgba(255,255,255,.25)}
+select option{background:#083a76;color:#fff}
+dialog{background:linear-gradient(180deg,#0d56ab,#083a76);color:#fff;border:1px solid rgba(255,255,255,.25)}
+dialog::backdrop{background:rgba(3,20,45,.65)}
+#drawer{background:linear-gradient(180deg,#0A4D9C,#062b57)}
+#toast{background:#8FD3FF;color:#062b57}
+.bars i{background:#8FD3FF}
+a{color:#b5e3ff}

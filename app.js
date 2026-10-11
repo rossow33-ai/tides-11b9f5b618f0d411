@@ -1,7 +1,7 @@
 'use strict';
 const KEY='peptideTracker.v1';
 const SITES=['L Abdomen','R Abdomen','L Thigh','R Thigh','L Delt','R Delt','L Glute','R Glute'];
-const COLORS=['#5eead4','#818cf8','#f472b6','#fbbf24','#60a5fa','#a3e635','#fb923c','#c084fc'];
+const COLORS=['#8FD3FF','#FFD166','#ffffff','#7cc4ff','#9af0b8','#ffb3b3','#c9b6ff','#4fb0ff'];
 const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 let S=load(), tab='wind', calMonth=new Date(), charts=[];
 const $=s=>document.querySelector(s), uid=()=>Math.random().toString(36).slice(2,10);
@@ -117,7 +117,7 @@ window.dayDetail=k=>{const ls=S.logs.filter(l=>ymd(l.ts)===k);$('#dayDetail').in
 function drawCharts(){const days=[...Array(30)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()-29+i);return ymd(d)});
  const sets=S.peptides.map(p=>({label:p.name,backgroundColor:color(p.id),data:days.map(k=>S.logs.filter(l=>l.peptideId===p.id&&ymd(l.ts)===k).reduce((a,l)=>a+ +l.doseMcg,0))})).filter(s=>s.data.some(v=>v));
  const sc={};S.logs.forEach(l=>{if(l.site)sc[l.site]=(sc[l.site]||0)+1});
- if(window.Chart&&!window.__noChart){Chart.defaults.color='#8a96ad';Chart.defaults.borderColor='#263042';
+ if(window.Chart&&!window.__noChart){Chart.defaults.color='#cfe6ff';Chart.defaults.borderColor='rgba(255,255,255,.15)';
   charts.push(new Chart($('#c1'),{type:'bar',data:{labels:days.map(k=>k.slice(5)),datasets:sets},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true}}}}));
   charts.push(new Chart($('#c2'),{type:'doughnut',data:{labels:Object.keys(sc),datasets:[{data:Object.values(sc),backgroundColor:COLORS,borderWidth:0}]},options:{maintainAspectRatio:false}}));
  }else{ // fallback: CSS bars
@@ -209,7 +209,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='22';
+const APP_VERSION='23';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
