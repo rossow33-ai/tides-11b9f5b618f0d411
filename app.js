@@ -52,7 +52,7 @@ function render(){charts.forEach(c=>c.destroy());charts=[];
  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
  const W=tab==='wind',td=document.getElementById('tide');document.documentElement.classList.toggle('wind',W);if(td){const was=td.style.display==='block';td.style.display=W?'block':'none';if(W&&!was&&window.tideShow)tideShow()}if(W)return;
  $('#hdrDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
- $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested,recon,rpick,dplan})[tab]()+'<p class="disc">⚠️ For personal record-keeping only. Not medical advice. Consult a qualified healthcare professional.</p>';
+ $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested,recon,rpick,dplan,pconfirm})[tab]()+'<p class="disc">⚠️ For personal record-keeping only. Not medical advice. Consult a qualified healthcare professional.</p>';
  if(tab==='history')drawCharts()}
 function empty(msg,btn){return`<div class="card muted" style="text-align:center;padding:30px">${msg}<br><br>${btn||''}</div>`}
 
@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='27';
+const APP_VERSION='28';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -321,7 +321,7 @@ function recon(){const p=(RQ.flow?(RQ.id?{...pep(RQ.id),vialMg:RQ.draft.vialMg}:
  <div style="margin-top:12px"><div class="muted">Concentration</div><b style="font-size:22px">${fmt(c,3)} mg/mL</b></div>
  ${bac>3?`<div class="muted" style="margin-top:6px">Note: ${fmt(bac,1)} mL needs a vial with that much headroom; check your vial's capacity.</div>`:''}</div>
  <div class="card"><b>Mixing checklist</b>${['Wash hands; swab both vial tops with alcohol and let dry','Draw '+fmt(bac,2)+' mL bacteriostatic water','Inject slowly down the inside wall of the peptide vial','Swirl gently until clear; do not shake','Label with today\'s date and refrigerate (2–8 °C)'].map((s,k)=>`<label style="display:flex;align-items:flex-start;gap:10px;margin:10px 0;font-size:15px;color:#fff"><input type="checkbox" style="width:20px;height:20px;margin:2px 0 0;flex:none"><span>${k+1}. ${esc(s)}</span></label>`).join('')}</div>
- ${RQ.flow?`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="flowMixed()">✓ Mixed</button><button class="btn ghost" onclick="startRecon()">‹ Back</button></div>`:`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="markMixed('${p.id}');reconNext()">✓ Mixed</button><button class="btn ghost" onclick="reconNext()">${last?'Not now':'Skip ›'}</button></div>`}
+ ${RQ.flow?`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="flowMixed()">✓ Mixed</button><button class="btn ghost" onclick="startRecon()">‹ Back</button></div>`:`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="markMixed('${p.id}');autoPlan(pep('${p.id}'));tab='pconfirm';render();scrollTo(0,0)">✓ Mixed</button><button class="btn ghost" onclick="reconNext()">${last?'Not now':'Skip ›'}</button></div>`}
  <p class="muted" style="margin-top:10px">${p.reconDate?`Current vial mixed ${esc(p.reconDate)}, expires ${expiry(p).toLocaleDateString()}. `:''}Sealed vials on hand: ${+p.vials||0}.</p>`}
 window.markMixed=id=>{const p=pep(id);if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();render();toast('Vial mixed · expires '+expiry(p).toLocaleDateString())};
 window.reconNext=()=>{const p=pep(RQ.id);if(p&&!p.reconDate){p.bacMl=RQ.bac;save()}if(RQ.i<RQ.ids.length-1){RQ.i++;RQ.id=RQ.ids[RQ.i];RQ.bac=+pep(RQ.id).bacMl||BAC();RQ.dose=null;render();scrollTo(0,0)}else{tab='inventory';render();scrollTo(0,0)}};
@@ -363,7 +363,7 @@ function planFor(name,mg){const sl=slotFor(name),it=sgItem(name),base={slot:sl.s
  if(it)return{...base,phases:it.phases.map(ph=>({w:ph.w,mcg:ph.mcg})),freq:it.days.length===7?'daily':'weekdays',weekdays:it.days.length===7?[]:it.days,timesPerWeek:1,src:'site (titration from suggested schedule)',url:it.url};
  const i=refFind(name);if(i>=0){const es=REF()[i].entries,e=es.find(x=>+x.vialMg===+mg&&x.minMcg!=null)||es.find(x=>x.minMcg!=null);
   if(e){const xw=e.appFreq==='xweek';return{...base,phases:[{w:null,mcg:+e.minMcg}],freq:xw?'xweek':'daily',timesPerWeek:+e.timesPerWeek||1,weekdays:[],src:'site reference low dose · '+e.freq,url:e.url}}}
- return{...base,phases:[{w:null,mcg:250}],freq:'daily',timesPerWeek:1,weekdays:[],src:'no Reference data: enter your dose',url:''}}
+ return{...base,phases:[{w:null,mcg:0}],freq:'daily',timesPerWeek:1,weekdays:[],src:'no Reference dose data',url:'',noDose:true}}
 let RP={q:'',name:null,mg:null,pid:null};
 window.startRecon=()=>{RP={q:'',name:null,mg:null,pid:null};tab='rpick';render();scrollTo(0,0)};
 function rpList(){const q=RP.q.toLowerCase(),mine=S.peptides.filter(p=>!q||p.name.toLowerCase().includes(q)),own=new Set(S.peptides.map(p=>p.name.toLowerCase())),
@@ -397,15 +397,27 @@ function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return ymd(d)}
 window.flowMixed=()=>{const d=RQ.draft;let p=RQ.id?pep(RQ.id):null,isNew=!p;
  if(!p){p={id:uid(),name:d.name,vialMg:+d.vialMg,bacMl:RQ.bac,vials:0,remainingMg:0,reorderAt:1,expiryDays:EXP(),reconDate:'',notes:''};S.peptides.push(p)}
  if(RQ.newSize)p.vialMg=+RQ.newSize;if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();
- RQ.id=p.id;RQ.isNew=isNew;tab='dplan';render();scrollTo(0,0);toast(`${isNew?'Added '+p.name+' · ':''}vial mixed, expires ${expiry(p).toLocaleDateString()}`)};
+ RQ.isNew=isNew;autoPlan(p);tab='pconfirm';render();scrollTo(0,0)};
 function dplan(){const p=pep(RQ.id);if(!p||!RQ.plan){tab='today';return today()}const u=units(p,RQ.dose);
  return`<h2>Dosing plan · ${esc(p.name)}</h2><div class="muted" style="margin-bottom:8px">${fmt(p.vialMg)} mg vial in ${fmt(p.bacMl,2)} mL (${fmt(p.vialMg/p.bacMl,3)} mg/mL). Educational reference only, not medical advice.</div>
  <div class="card"><label>Dose (mcg)</label><input type="number" min="0" step="any" value="${RQ.dose}" onchange="RQ.dose=+this.value||0;render()">
  <div style="margin:10px 0 2px;font-size:24px;font-weight:700;color:var(--ac)">${fmt(u,1)} units${u>100?' <span class="pill bad">2 draws</span>':''}</div><div class="muted">U-100 syringe</div></div>
  ${flowCard(p,u)}
- <div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="planSave()">Save plan</button><button class="btn ghost" onclick="RQ.flow=false;tab='today';render();scrollTo(0,0)">Skip</button></div>`}
-window.planSave=()=>{const p=pep(RQ.id),pl=RQ.plan;let made=0;const ex=S.protocols.filter(r=>r.peptideId===p.id&&r.active!==false);
- if(!(ex.length&&RQ.keep==='keep')){const keepId=ex[0]&&ex[0].id;S.protocols=S.protocols.filter(r=>!(r.peptideId===p.id&&r.active!==false));
-  pl.phases.forEach((ph,k)=>{const mcg=k===0?RQ.dose:ph.mcg;S.protocols.push({id:k===0&&keepId?keepId:uid(),peptideId:p.id,doseMcg:+mcg,time:pl.time,freq:pl.freq,timesPerWeek:+pl.timesPerWeek||1,everyN:1,weekdays:pl.weekdays||[],cycleOn:0,cycleOff:0,
-   start:ph.w?addDays((ph.w[0]-1)*7):ymd(new Date()),end:ph.w&&k<pl.phases.length-1?addDays(ph.w[1]*7-1):'',active:true,note:'Auto from Reconstitute ('+pl.src+'; slot '+pl.slotSrc+')'});made++})}
- save();RQ.flow=false;tab='today';render();scrollTo(0,0);toast(made?`${made} protocol${made>1?'s':''} ${ex.length?'updated':'created'}`:'Kept existing protocol')};
+ <div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="planSave()">Save plan</button><button class="btn ghost" onclick="tab='pconfirm';render();scrollTo(0,0)">Cancel</button></div>`}
+function savePlan(p,pl,dose,keep){let made=0;const ex=S.protocols.filter(r=>r.peptideId===p.id&&r.active!==false);
+ if(!(ex.length&&keep==='keep')){const keepId=ex[0]&&ex[0].id;S.protocols=S.protocols.filter(r=>!(r.peptideId===p.id&&r.active!==false));
+  pl.phases.forEach((ph,k)=>{const mcg=k===0?dose:ph.mcg;S.protocols.push({id:k===0&&keepId?keepId:uid(),peptideId:p.id,doseMcg:+mcg||0,time:pl.time,freq:pl.freq,timesPerWeek:+pl.timesPerWeek||1,everyN:1,weekdays:pl.weekdays||[],cycleOn:0,cycleOff:0,
+   start:ph.w?addDays((ph.w[0]-1)*7):ymd(new Date()),end:ph.w&&k<pl.phases.length-1?addDays(ph.w[1]*7-1):'',active:true,note:'Auto plan ('+pl.src+'; slot '+pl.slotSrc+')'});made++})}
+ save();return{made,updated:ex.length>0}}
+window.planSave=()=>{const p=pep(RQ.id),r=savePlan(p,RQ.plan,RQ.dose,RQ.keep);RQ.conf=confText(p,RQ.plan,RQ.dose,r.updated);tab='pconfirm';render();scrollTo(0,0)};
+function t12(t){const[h,m]=(t||'08:00').split(':').map(Number);return`${h%12||12}:${String(m).padStart(2,'0')}`}
+function confText(p,pl,dose,updated){const u=units(p,dose),f=pl.freq==='daily'?'daily':flowFreqTxt(pl);
+ return{title:`${p.name} ${updated?'plan updated':'added'}`,line:pl.noDose||!dose?`Enter your dose · ${f}, ${pl.slot} ${t12(pl.time)}`:`${sgMcgTxt(dose)} (${Math.round(u)}u) ${f}, ${pl.slot} ${t12(pl.time)}`,
+  tit:pl.phases.length>1?'Titration: '+pl.phases.map((ph,k)=>`wk ${ph.w[0]}–${ph.w[1]} ${sgMcgTxt(k===0?dose:ph.mcg)}`).join(' → '):'',src:`Dose: ${pl.src} · slot: ${pl.slotSrc}`,noDose:pl.noDose||!dose}}
+// auto plan for a peptide (after its vial is marked mixed)
+function autoPlan(p){const pl=planFor(p.name,p.vialMg),dose=pl.phases[0].mcg,r=savePlan(p,pl,dose,'update');RQ.id=p.id;RQ.plan=pl;RQ.dose=dose;RQ.keep='update';RQ.conf=confText(p,pl,dose,r.updated)}
+function pconfirm(){const c=RQ.conf;if(!c){tab='today';return today()}const more=RQ.ids.length&&RQ.i<RQ.ids.length-1;
+ return`<h2>Vial mixed ✓</h2><div class="card" style="border:1px solid rgba(255,255,255,.4)"><div class="muted">${esc(c.title)}</div><div style="font-size:21px;font-weight:700;margin:6px 0">${esc(c.line)}</div>
+ ${c.noDose?'<div class="pill warn" style="display:inline-block;margin:4px 0">⚠ No dose in the Reference: tap Edit plan to enter your dose</div>':''}${c.tit?`<div class="muted">${esc(c.tit)}</div>`:''}<div class="muted" style="font-size:12px;margin-top:6px">${esc(c.src)} · starting today. Not medical advice.</div></div>
+ <div class="row" style="gap:10px"><button class="btn" onclick="pconfDone()">${more?'Next peptide ›':'Done'}</button><button class="btn ghost" onclick="tab='dplan';render();scrollTo(0,0)">Edit plan</button></div>`}
+window.pconfDone=()=>{RQ.conf=null;if(RQ.ids.length&&RQ.i<RQ.ids.length-1){reconNext()}else{RQ.flow=false;RQ.ids=[];tab='today';render();scrollTo(0,0)}};
