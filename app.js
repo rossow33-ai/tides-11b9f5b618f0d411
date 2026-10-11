@@ -52,7 +52,7 @@ function render(){charts.forEach(c=>c.destroy());charts=[];
  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
  const W=tab==='wind',td=document.getElementById('tide');document.documentElement.classList.toggle('wind',W);if(td){const was=td.style.display==='block';td.style.display=W?'block':'none';if(W&&!was&&window.tideShow)tideShow()}if(W)return;
  $('#hdrDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
- $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested,recon})[tab]()+'<p class="disc">⚠️ For personal record-keeping only. Not medical advice. Consult a qualified healthcare professional.</p>';
+ $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested,recon,rpick})[tab]()+'<p class="disc">⚠️ For personal record-keeping only. Not medical advice. Consult a qualified healthcare professional.</p>';
  if(tab==='history')drawCharts()}
 function empty(msg,btn){return`<div class="card muted" style="text-align:center;padding:30px">${msg}<br><br>${btn||''}</div>`}
 
@@ -64,14 +64,14 @@ function today(){const d=new Date();const items=[];
  const todays=S.logs.filter(l=>ymd(l.ts)===ymd(d)).sort((a,b)=>b.ts-a.ts);
  const alerts=S.peptides.flatMap(p=>invStatus(p).out.map(o=>`<span class="pill ${o[0]}">${esc(p.name)}: ${o[1]}</span>`));
  const al=S.peptides.flatMap(p=>invStatus(p).out.map(o=>[o[0],p.name+': '+o[1]])).sort((x,y)=>(y[0]==='bad')-(x[0]==='bad'));
- return`<h2>Today <button class="btn sm ghost" onclick="logDlg()">+ Log</button></h2>
+ return`<h2>Today <button class="btn sm ghost" onclick="logDlg()">+ Log</button></h2><button class="btn" style="width:100%;margin:4px 0 10px" onclick="startRecon()">🧪 Reconstitute vial</button>
  <div class="subtle">${items.filter(i=>!i.done).length} due · ${items.filter(i=>i.done).length} done · next site ${esc(suggestSite())}${streak()?` · ${streak()}-day streak`:''}</div>
  ${al.length?`<a class="alertline" onclick="tab='inventory';render()">⚠ ${esc(al[0][1])}${al.length>1?` · +${al.length-1} more`:''} ›</a>`:''}
- ${items.length?items.map(({r,p,done})=>`<div class="card row duebig ${done?'done':''}" style="border-left:4px solid ${color(p.id)}">
+ ${items.length?[['AM',items.filter(x=>!x.r.time||x.r.time<'12:00')],['PM',items.filter(x=>x.r.time&&x.r.time>='12:00')]].filter(g=>g[1].length).map(([lab,its])=>`<div class="tsec" style="margin:14px 0 6px;font-weight:700;letter-spacing:.04em;color:#cfe6ff">${lab==='AM'?'☀️ AM':'🌙 PM'} <span class="muted">${its.filter(i=>!i.done).length} due</span></div>`+its.map(({r,p,done})=>`<div class="card row duebig ${done?'done':''}" style="border-left:4px solid ${color(p.id)}">
   <div class="sp"><h3>${esc(p.name)} <span class="muted">${r.time?'· '+r.time:''}</span></h3>
   <div style="font-size:15px">${fmt(r.doseMcg)} mcg · <b style="color:var(--ac)">${fmt(units(p,r.doseMcg),1)} units</b>${units(p,r.doseMcg)>100?' <span class="pill bad">2 draws</span>':''}</div><div class="muted">${freqText(r)}${r.freq==='xweek'?` · ${weekLogs(r,d)}/${r.timesPerWeek} this week`:''}</div></div>
   ${done?'<span class="pill ok">✓ Logged</span>':`<button class="btn" onclick="quickLog('${r.id}')">Log</button>`}
-  <button class="btn sm ghost" onclick="logDlg('${r.id}')" aria-label="Log with details">⋯</button></div>`).join('')
+  <button class="btn sm ghost" onclick="logDlg('${r.id}')" aria-label="Log with details">⋯</button></div>`).join('')).join('')
   :empty(S.peptides.length?'Nothing scheduled today.':'Welcome! Add a peptide to get started.',S.peptides.length?`<button class="btn" onclick="protoDlg()">Add protocol</button>`:`<button class="btn" onclick="pepDlg()">Add peptide</button> <button class="btn ghost" onclick="loadDemo()">Load demo data</button>`)}
  ${todays.length?`<details class="card"><summary>Logged today (${todays.length})</summary>${todays.map(logRow).join('')}</details>`:''}`}
 function streak(){let n=0,d=new Date();const set=new Set(S.logs.map(l=>ymd(l.ts)));if(!set.has(ymd(d)))d.setDate(d.getDate()-1);while(set.has(ymd(d))){n++;d.setDate(d.getDate()-1)}return n}
@@ -126,7 +126,7 @@ function drawCharts(){const days=[...Array(30)].map((_,i)=>{const d=new Date();d
   $('#c1w').innerHTML='<div class="bars">'+days.map((k,i)=>`<div><span style="width:44px">${k.slice(5)}</span><i style="width:${tot[i]/mx*70}%"></i>${tot[i]||''}</div>`).join('')+'</div><p class="muted">Chart.js unavailable offline — simple view shown.</p>';
   const ms=Math.max(1,...Object.values(sc));$('#c2w').innerHTML='<div class="bars">'+Object.entries(sc).map(([s,n])=>`<div><span style="width:80px">${esc(s)}</span><i style="width:${n/ms*60}%"></i>${n}</div>`).join('')+'</div>'}}
 
-function inventory(){return`<h2>Inventory</h2>${S.peptides.length?S.peptides.map(p=>{const st=invStatus(p),e=expiry(p);const pct=p.vialMg?Math.min(100,(p.remainingMg||0)/p.vialMg*100):0;
+function inventory(){return`<h2>Inventory</h2><button class="btn" style="width:100%;margin:4px 0 12px" onclick="startRecon()">🧪 Reconstitute vial</button>${S.peptides.length?S.peptides.map(p=>{const st=invStatus(p),e=expiry(p);const pct=p.vialMg?Math.min(100,(p.remainingMg||0)/p.vialMg*100):0;
  return`<div class="card swipe" data-pid="${p.id}" style="border-left:4px solid ${color(p.id)}"><div class="row"><h3 class="sp">${esc(p.name)}</h3>${st.out.map(o=>`<span class="pill ${o[0]}">${o[1]}</span>`).join(' ')||'<span class="pill ok">OK</span>'}</div>
  <div class="muted" style="margin-top:4px">${fmt(p.remainingMg||0,2)} mg left in open vial · ${p.vials||0} sealed · ${isFinite(st.daysLeft)?'~'+Math.floor(st.daysLeft)+' days supply':'—'}</div><details><summary>Details & actions</summary><div class="grid" style="margin-top:8px"><div class="stat"><b>${fmt(p.remainingMg||0,2)} mg</b><span class="muted">in open vial (${Math.round(pct)}%)</span></div>
  <div class="stat"><b>${p.vials||0}</b><span class="muted">sealed vials</span></div><div class="stat"><b>${isFinite(st.daysLeft)?Math.floor(st.daysLeft)+'d':'—'}</b><span class="muted">est. supply</span></div>
@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='25';
+const APP_VERSION='26';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -313,11 +313,11 @@ window.mixFlow=ids=>{ids=ids.filter(id=>pep(id));if(!ids.length)return;RQ={ids,i
 function reconDose(p){const r=S.protocols.find(x=>x.peptideId===p.id&&x.doseMcg);if(r)return +r.doseMcg;const i=refFind(p.name);if(i>=0){const e=REF()[i].entries.find(x=>x.minMcg!=null);if(e)return +e.minMcg}return 250}
 function syringe(u){const f=Math.min(u,100),W=300,x0=40,L=220,fx=x0+L*f/100;let t='';for(let k=0;k<=100;k+=5){const x=x0+L*k/100,big=k%10===0;t+=`<line x1="${x}" y1="18" x2="${x}" y2="${big?34:28}" stroke="#cfe6ff" stroke-width="${big?1.4:.8}"/>`+(k%20===0?`<text x="${x}" y="52" fill="#cfe6ff" font-size="10" text-anchor="middle">${k}</text>`:'')}
  return`<svg viewBox="0 0 ${W} 60" width="100%" role="img" aria-label="Syringe filled to ${fmt(f,1)} units"><rect x="${x0}" y="14" width="${L}" height="24" rx="5" fill="rgba(255,255,255,.08)" stroke="#cfe6ff"/><rect x="${x0}" y="15" width="${Math.max(0,fx-x0)}" height="22" rx="4" fill="#8FD3FF" opacity=".75"/>${t}<rect x="${x0+L}" y="20" width="22" height="12" fill="#cfe6ff"/><rect x="${x0+L+22}" y="8" width="6" height="36" fill="#cfe6ff"/><line x1="${x0}" y1="26" x2="10" y2="26" stroke="#cfe6ff" stroke-width="2"/><rect x="${fx-2}" y="10" width="4" height="32" fill="#FFD166"/></svg>`}
-function recon(){const p=pep(RQ.id);if(!p){tab='inventory';return inventory()}
+function recon(){const p=(RQ.flow?(RQ.id?{...pep(RQ.id),vialMg:RQ.draft.vialMg}:RQ.draft):pep(RQ.id));if(!p){tab='inventory';return inventory()}
  if(RQ.dose==null)RQ.dose=reconDose(p);const mg=+p.vialMg||0,bac=RQ.bac,c=bac>0?mg/bac:0,u=c?RQ.dose/(c*1000)*100:0,per=RQ.dose>0?Math.floor(mg*1000/RQ.dose):0,ri=refFind(p.name),g=ri>=0?REF()[ri]:null;
  const n=RQ.ids.length,last=RQ.i>=n-1;
  return`<h2>Mix ${esc(p.name)}${n>1?` <span class="muted">${RQ.i+1} of ${n}</span>`:''}</h2>
- <div class="card"><div class="row" style="gap:12px;flex-wrap:wrap"><div><label>Vial (mg)</label><input type="number" min="0" step="any" value="${mg}" style="width:110px" onchange="pep('${p.id}').vialMg=+this.value||0;save();render()"></div>
+ <div class="card"><div class="row" style="gap:12px;flex-wrap:wrap"><div><label>Vial (mg)</label><input type="number" min="0" step="any" value="${mg}" style="width:110px" onchange="if(RQ.flow){RQ.draft.vialMg=+this.value||0;RQ.newSize=+this.value||0}else{pep('${p.id}').vialMg=+this.value||0;save()}render()"></div>
  <div><label>BAC water (mL)</label><div class="row" style="gap:6px">${[1,2,3,5,10].map(v=>`<button class="btn sm ${bac===v?'':'ghost'}" onclick="RQ.bac=${v};render()">${v} mL</button>`).join('')}<input type="number" min="0.1" step="0.1" value="${bac}" aria-label="Custom mL" style="width:80px" onchange="RQ.bac=+this.value||2;render()"></div>${(()=>{const bi=bacInfo(p.name,mg);return`<div class="muted" style="margin-top:6px;font-size:12px">Suggested: ${fmt(bi.ml,2)} mL ${bi.src==='site'?`(peptidedosages.com mix for this vial)`:bi.src==='default'?'(large vial, no site volume: app default)':'(app default)'}</div>`})()}</div></div>
  <div class="row" style="gap:18px;margin-top:12px;flex-wrap:wrap"><div><div class="muted">Concentration</div><b style="font-size:20px">${fmt(c,3)} mg/mL</b></div><div><div class="muted">Per unit</div><b style="font-size:20px">${fmt(c*10,2)} mcg/u</b></div></div></div>
  <div class="card"><label>Target dose (mcg)</label><input type="number" min="0" step="any" value="${RQ.dose}" onchange="RQ.dose=+this.value||0;render()">
@@ -325,7 +325,7 @@ function recon(){const p=pep(RQ.id);if(!p){tab='inventory';return inventory()}
  <div class="muted">U-100 insulin syringe · about ${per} doses per vial</div>${u>100?`<div class="pill bad" style="display:block;margin-top:8px;white-space:normal">⚠ ${fmt(u,0)} units is more than one 1 mL syringe: needs 2 draws (or split the dose).</div>`:''}${u>0&&u<2?`<div class="pill bad" style="display:block;margin-top:8px;white-space:normal">⚠ Under 2 units is hard to measure accurately; more BAC water would make it easier.</div>`:''}${bac>3&&bac>0?`<div class="muted" style="margin-top:6px">Note: ${fmt(bac,1)} mL needs a vial with that much headroom; check your vial's capacity.</div>`:''}
  ${g?`<div class="refbox" style="margin-top:10px"><b>Reference</b>: ${[...new Set(g.entries.map(e=>e.doseRange+' · '+e.freq))].map(esc).join('; ')}<div class="muted"><a href="${esc(g.entries[0].url||'#')}" target="_blank" rel="noopener">Source: peptidedosages.com</a></div></div>`:'<div class="muted" style="margin-top:8px">No Reference entry for this peptide.</div>'}</div>
  <div class="card"><b>Mixing checklist</b>${['Wash hands; swab both vial tops with alcohol and let dry','Draw '+fmt(bac,2)+' mL bacteriostatic water','Inject slowly down the inside wall of the peptide vial','Swirl gently until clear; do not shake','Label with today\'s date and refrigerate (2–8 °C)'].map((s,k)=>`<label style="display:flex;align-items:flex-start;gap:10px;margin:10px 0;font-size:15px;color:#fff"><input type="checkbox" style="width:20px;height:20px;margin:2px 0 0;flex:none"><span>${k+1}. ${esc(s)}</span></label>`).join('')}</div>
- <div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="markMixed('${p.id}')">Mark vial mixed today</button><button class="btn ghost" onclick="reconNext()">${last?'Done':'Next peptide ›'}</button></div>
+ ${RQ.flow?flowCard(p,u)+`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="flowMixed()">✓ Mixed: save vial & protocol</button><button class="btn ghost" onclick="startRecon()">‹ Back</button></div>`:`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="markMixed('${p.id}')">Mark vial mixed today</button><button class="btn ghost" onclick="reconNext()">${last?'Done':'Next peptide ›'}</button></div>`}
  <p class="muted" style="margin-top:10px">${p.reconDate?`Current vial mixed ${esc(p.reconDate)}, expires ${expiry(p).toLocaleDateString()}. `:''}Sealed vials on hand: ${+p.vials||0}.</p>`}
 window.markMixed=id=>{const p=pep(id);if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();render();toast('Vial mixed · expires '+expiry(p).toLocaleDateString())};
 window.reconNext=()=>{const p=pep(RQ.id);if(p&&!p.reconDate){p.bacMl=RQ.bac;save()}if(RQ.i<RQ.ids.length-1){RQ.i++;RQ.id=RQ.ids[RQ.i];RQ.bac=+pep(RQ.id).bacMl||BAC();RQ.dose=null;render();scrollTo(0,0)}else{tab='inventory';render();scrollTo(0,0)}};
@@ -354,3 +354,55 @@ function undoBar(msg,fn){let u=$('#undoBar');if(!u){u=document.createElement('di
 (function(){let sx=0,sy=0,el=null;document.addEventListener('touchstart',e=>{el=e.target.closest('.card.swipe');if(!el)return;sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
  document.addEventListener('touchmove',e=>{if(!el)return;const dx=e.touches[0].clientX-sx,dy=e.touches[0].clientY-sy;if(Math.abs(dy)>Math.abs(dx)){el.style.transform='';return}if(dx<0)el.style.transform=`translateX(${Math.max(dx,-120)}px)`},{passive:true});
  document.addEventListener('touchend',e=>{if(!el)return;const dx=e.changedTouches[0].clientX-sx,c=el;el=null;c.style.transition='transform .2s';c.style.transform='';setTimeout(()=>c.style.transition='',220);if(dx<-90)delPep(c.dataset.pid)})})();
+
+// ---- v26 Reconstitute-vial flow: pick -> mix -> auto protocol
+const SLOT_RULES=[[/tesamorelin|cjc|ipamorelin|sermorelin|ghrp|hexarelin|mk-?677|ghrh|modgrf/i,'PM','GH secretagogue: bedtime on an empty stomach (common convention)'],
+ [/melanotan|\bmt-?2\b|\bmt-?ii\b/i,'PM','Common convention: evening dosing to sleep through nausea/flushing; the site says any consistent time'],
+ [/semaglutide|tirzepatide|retatrutide|glp|cagrilintide|liraglutide|survodutide|mazdutide/i,'AM','GLP-1 type: weekly, morning (app default)'],
+ [/nad|ss-?31|mots/i,'AM','Energy/mitochondrial: morning (app default)'],[/bpc|tb-?500|thymosin beta|wolverine/i,'AM','Healing peptide: morning (app default)'],[/pt-?141|bremelanotide/i,'PM','Evening (app default)']];
+function slotFor(name){const i=refFind(name);if(i>=0){const t=JSON.stringify(REF()[i]);if(/\b(at bedtime|before bed(time)?)\b/i.test(t))return{slot:'PM',src:'site',why:'Site: "at bedtime"'};if(/\bin the morning\b/i.test(t)&&!/evening/i.test(t))return{slot:'AM',src:'site',why:'Site: "in the morning"'}}
+ for(const[re,sl,why]of SLOT_RULES)if(re.test(name))return{slot:sl,src:'app default',why};return{slot:'AM',src:'app default',why:'No timing guidance; morning default'}}
+function sgItem(name){const n=(name||'').toLowerCase();return(SG().items||[]).find(it=>it.name.toLowerCase()===n||(it.alias||'').toLowerCase()===n)}
+function planFor(name,mg){const sl=slotFor(name),it=sgItem(name),base={slot:sl.slot,slotSrc:sl.src,slotWhy:sl.why,time:sl.slot==='AM'?'08:00':'21:00'};
+ if(it)return{...base,phases:it.phases.map(ph=>({w:ph.w,mcg:ph.mcg})),freq:it.days.length===7?'daily':'weekdays',weekdays:it.days.length===7?[]:it.days,timesPerWeek:1,src:'site (titration from suggested schedule)',url:it.url};
+ const i=refFind(name);if(i>=0){const es=REF()[i].entries,e=es.find(x=>+x.vialMg===+mg&&x.minMcg!=null)||es.find(x=>x.minMcg!=null);
+  if(e){const xw=e.appFreq==='xweek';return{...base,phases:[{w:null,mcg:+e.minMcg}],freq:xw?'xweek':'daily',timesPerWeek:+e.timesPerWeek||1,weekdays:[],src:'site reference low dose · '+e.freq,url:e.url}}}
+ return{...base,phases:[{w:null,mcg:250}],freq:'daily',timesPerWeek:1,weekdays:[],src:'no Reference data: enter your dose',url:''}}
+let RP={q:'',name:null,mg:null,pid:null};
+window.startRecon=()=>{RP={q:'',name:null,mg:null,pid:null};tab='rpick';render();scrollTo(0,0)};
+function rpList(){const q=RP.q.toLowerCase(),mine=S.peptides.filter(p=>!q||p.name.toLowerCase().includes(q)),own=new Set(S.peptides.map(p=>p.name.toLowerCase())),
+ ref=REF().map((g,i)=>[g,i]).filter(([g])=>!own.has(g.name.toLowerCase())&&(!q||g.name.toLowerCase().includes(q)));
+ return(mine.length?`<div class="muted" style="margin:8px 0 4px">Your peptides</div>`+mine.map(p=>`<button class="btn ghost" style="display:block;width:100%;text-align:left;margin:4px 0" onclick="rpChoose('${esc(p.name).replace(/'/g,"\\'")}','${p.id}')">${esc(p.name)} <span class="muted">· ${fmt(p.vialMg)} mg · ${+p.vials||0} sealed</span></button>`).join(''):'')
+ +(ref.length?`<div class="muted" style="margin:12px 0 4px">Reference (${ref.length})</div>`+ref.slice(0,60).map(([g,i])=>`<button class="btn ghost" style="display:block;width:100%;text-align:left;margin:4px 0" onclick="rpChoose(REF()[${i}].name,'')">${esc(g.name)} <span class="muted">· ${[...new Set(g.entries.map(e=>e.vialMg).filter(Boolean))].map(v=>fmt(v)+' mg').join(', ')}</span></button>`).join(''):'')
+ +(q&&!mine.some(p=>p.name.toLowerCase()===q)&&!ref.some(([g])=>g.name.toLowerCase()===q)?`<button class="btn ghost" style="display:block;width:100%;margin:8px 0" onclick="rpChoose(RP.q,'')">+ Use “${esc(RP.q)}” (not in Reference)</button>`:'')}
+window.rpChoose=(name,pid)=>{RP.name=name;RP.pid=pid||null;const p=pid?pep(pid):null,i=refFind(name);RP.mg=p?+p.vialMg:(i>=0?+(REF()[i].entries.find(e=>e.vialMg)||{}).vialMg||null:null);render();scrollTo(0,0)};
+function rpick(){if(!RP.name)return`<h2>Reconstitute vial</h2><div class="card"><label>Step 1 · Choose a peptide</label><input id="rpq" placeholder="Search your peptides or the Reference…" value="${esc(RP.q)}" oninput="RP.q=this.value;$('#rpl').innerHTML=rpList()" autocomplete="off"><div id="rpl">${rpList()}</div></div>`;
+ const i=refFind(RP.name),p=RP.pid?pep(RP.pid):null,sizes=[...new Set([...(p?[+p.vialMg]:[]),...(i>=0?REF()[i].entries.map(e=>+e.vialMg).filter(Boolean):[])])];
+ return`<h2>Reconstitute ${esc(RP.name)}</h2><div class="card"><label>Step 2 · Vial size</label><div class="row" style="gap:8px;flex-wrap:wrap;margin:6px 0">${sizes.map(v=>`<button class="btn sm ${RP.mg===v?'':'ghost'}" onclick="RP.mg=${v};render()">${fmt(v)} mg</button>`).join('')}</div>
+ <label>Custom (mg)</label><input type="number" min="0" step="any" value="${RP.mg??''}" onchange="RP.mg=+this.value||null;render()">
+ <div class="row" style="gap:10px;margin-top:14px"><button class="btn ghost" onclick="RP.name=null;render()">‹ Back</button><button class="btn" ${RP.mg?'':'disabled'} onclick="rpGo()">Continue ›</button></div></div>`}
+window.rpGo=()=>{const ex=RP.pid?pep(RP.pid):S.peptides.find(x=>x.name.toLowerCase()===RP.name.toLowerCase()),plan=planFor(RP.name,RP.mg);
+ const draft={id:'__draft',name:ex?ex.name:RP.name,vialMg:RP.mg,bacMl:bacFor(RP.name,RP.mg),vials:ex?ex.vials:0,reconDate:'',remainingMg:0};
+ RQ={ids:[],i:0,id:ex?ex.id:null,draft,flow:true,plan,keep:'update',bac:bacFor(RP.name,RP.mg),dose:plan.phases[0].mcg};if(ex&&+ex.vialMg!==+RP.mg)RQ.newSize=RP.mg;tab='recon';render();scrollTo(0,0)};
+const FQ={daily:'day',xweek:'week'};
+function flowFreqTxt(pl){return pl.freq==='daily'?'every day':pl.freq==='xweek'?(pl.timesPerWeek===1?'once a week':pl.timesPerWeek+'× a week'):(pl.weekdays||[]).map(i=>DOW[i]).join(', ')}
+function flowCard(p,u){const pl=RQ.plan,ex=RQ.id?S.protocols.filter(r=>r.peptideId===RQ.id&&r.active!==false):[];
+ return`<div class="card" style="border:1px solid rgba(255,255,255,.4)"><b>Your protocol</b>
+ <div style="font-size:18px;margin:8px 0">Take <b>${sgMcgTxt(RQ.dose)}</b> (<b style="color:var(--ac)">${fmt(u,1)} units</b>) ${flowFreqTxt(pl)}, <b>${pl.slot}</b> (${pl.time}), starting today</div>
+ ${pl.phases.length>1?`<div class="muted">Titration: ${pl.phases.map((ph,k)=>`wk ${ph.w[0]}–${ph.w[1]}: ${sgMcgTxt(k===0?RQ.dose:ph.mcg)}`).join(' → ')}</div>`:''}
+ <div class="f2" style="margin-top:8px"><div><label>Frequency</label><select onchange="RQ.plan.freq=this.value;render()"><option value="daily" ${pl.freq==='daily'?'selected':''}>Daily</option><option value="xweek" ${pl.freq==='xweek'?'selected':''}>× per week</option>${pl.freq==='weekdays'?'<option value="weekdays" selected>Set weekdays</option>':''}</select></div>
+ <div><label>${pl.freq==='xweek'?'Times per week':'Slot'}</label>${pl.freq==='xweek'?`<input type="number" min="1" max="7" value="${pl.timesPerWeek}" onchange="RQ.plan.timesPerWeek=+this.value||1;render()">`:`<select onchange="RQ.plan.slot=this.value;RQ.plan.time=this.value==='AM'?'08:00':'21:00';render()"><option ${pl.slot==='AM'?'selected':''}>AM</option><option ${pl.slot==='PM'?'selected':''}>PM</option></select>`}</div></div>
+ ${pl.freq==='xweek'?`<label>Slot</label><select onchange="RQ.plan.slot=this.value;RQ.plan.time=this.value==='AM'?'08:00':'21:00';render()"><option ${pl.slot==='AM'?'selected':''}>AM</option><option ${pl.slot==='PM'?'selected':''}>PM</option></select>`:''}
+ <label>Time</label><input type="time" value="${pl.time}" onchange="RQ.plan.time=this.value;RQ.plan.slot=this.value<'12:00'?'AM':'PM';render()">
+ <div class="muted" style="margin-top:8px;font-size:13px">Dose: ${esc(pl.src)}${pl.url?` · <a href="${esc(pl.url)}" target="_blank" rel="noopener">source</a>`:''}<br>Time slot: <b>${esc(pl.slotSrc)}</b>, ${esc(pl.slotWhy)}</div>
+ ${ex.length?`<div style="margin-top:10px"><b>${esc(p.name)} already has ${ex.length} active protocol${ex.length>1?'s':''}</b> (${ex.map(r=>fmt(r.doseMcg)+' mcg '+freqText(r)).map(esc).join('; ')})
+ <label style="display:flex;gap:10px;margin:6px 0"><input type="radio" name="kp" style="width:auto" ${RQ.keep==='update'?'checked':''} onchange="RQ.keep='update'"> Update it to this plan</label><label style="display:flex;gap:10px;margin:6px 0"><input type="radio" name="kp" style="width:auto" ${RQ.keep==='keep'?'checked':''} onchange="RQ.keep='keep'"> Keep existing, don't add</label></div>`:''}</div>`}
+function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return ymd(d)}
+window.flowMixed=()=>{const d=RQ.draft,pl=RQ.plan;let p=RQ.id?pep(RQ.id):null,isNew=!p;
+ if(!p){p={id:uid(),name:d.name,vialMg:+d.vialMg,bacMl:RQ.bac,vials:0,remainingMg:0,reorderAt:1,expiryDays:EXP(),reconDate:'',notes:''};S.peptides.push(p)}
+ if(RQ.newSize)p.vialMg=+RQ.newSize;if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());
+ let made=0;const ex=S.protocols.filter(r=>r.peptideId===p.id&&r.active!==false);
+ if(!(ex.length&&RQ.keep==='keep')){const keepId=ex[0]&&ex[0].id;S.protocols=S.protocols.filter(r=>!(r.peptideId===p.id&&r.active!==false));
+  pl.phases.forEach((ph,k)=>{const mcg=k===0?RQ.dose:ph.mcg;S.protocols.push({id:k===0&&keepId?keepId:uid(),peptideId:p.id,doseMcg:+mcg,time:pl.time,freq:pl.freq,timesPerWeek:+pl.timesPerWeek||1,everyN:1,weekdays:pl.weekdays||[],cycleOn:0,cycleOff:0,
+   start:ph.w?addDays((ph.w[0]-1)*7):ymd(new Date()),end:ph.w&&k<pl.phases.length-1?addDays(ph.w[1]*7-1):'',active:true,note:'Auto from Reconstitute ('+pl.src+'; slot '+pl.slotSrc+')'});made++})}
+ save();RQ.flow=false;tab='today';render();scrollTo(0,0);toast(`${isNew?'Added '+p.name+' · ':''}vial mixed, expires ${expiry(p).toLocaleDateString()}${made?` · ${made} protocol${made>1?'s':''} ${ex.length?'updated':'created'}`:''}`)};

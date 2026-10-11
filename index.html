@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#0A4D9C"><meta name="robots" content="noindex,nofollow"><title>Tides</title><meta name="description" content="Tide forecasts">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Tides">
 <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="favicon.png"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="stylesheet" href="styles.css?v=25">
+<link rel="stylesheet" href="styles.css?v=26">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer onerror="window.__noChart=true"></script>
 <script src="tide.js?v=25" defer></script><script src="reference.js?v=25" defer></script><script src="schedule.js?v=25" defer></script><script src="ocr.js?v=25" defer></script><script src="app.js?v=25" defer></script></head><body>
 <div id="tide"><div class="ttop"><button id="tbrand" aria-label="Tides"><img src="icon.svg" alt=""> Tides</button><span class="sp"></span><button class="tx" id="trefresh" aria-label="Refresh">↻</button><button class="tx" id="tgear" aria-label="Locations">⚙︎</button><button class="tx" id="tham" onclick="menu(true)" aria-label="Menu">☰</button></div>
@@ -19,7 +19,7 @@
 <div id="scrim" onclick="menu(false)"></div>
 <aside id="drawer" aria-hidden="true"><div class="dh"><img src="icon.svg" alt=""> Tides<span class="sp"></span><button class="x" onclick="menu(false)" aria-label="Close">✕</button></div>
  <button data-go="peptides">⚗ Peptides</button><button onclick="menu(false);loadOrder()">📷 Load order</button><button data-go="suggested">🗓 Suggested schedule</button><button data-go="protocols">⟳ Protocols</button><button data-go="reference">📖 Reference</button>
- <button data-go="calc">🧮 Calculator</button><button data-go="data">⇅ Data</button><button data-go="settings">⚙ Settings</button>
+ <button onclick="menu(false);startRecon()">🧪 Reconstitute vial</button><button data-go="calc">🧮 Calculator</button><button data-go="data">⇅ Data</button><button data-go="settings">⚙ Settings</button>
  </aside>
 <dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
 <div id="toast"></div>
