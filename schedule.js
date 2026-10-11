@@ -16,7 +16,7 @@ window.SUGGESTED={start:'2026-10-12',items:[
   url:'https://peptidedosages.com/single-peptide-dosages/nad-500-mg-10ml-vial-dosage-protocol/',
   phases:[{w:[1,1],mcg:50000},{w:[2,2],mcg:75000},{w:[3,16],mcg:100000}],
   site:'One administration per day. Week 1: 50 mg, week 2: 75 mg, weeks 3–16: 100 mg. Site labels this a community calculation schedule, not a validated subcutaneous protocol.',
-  why:'No timing on site; placed AM. Note: at 2 mL BAC a 500 mg vial is 250 mg/mL (site mixes 500 mg in 3 mL).'},
+  why:'No timing on site; placed AM. Mixed with 3 mL BAC per the site (500 mg in 3 mL = 166.67 mg/mL).'},
  {key:'tesa',name:'Tesamorelin',slot:'PM',days:[0,1,2,3,4,5,6],vials:[5,10,20],
   url:'https://peptidedosages.com/single-peptide-dosages/tesamorelin-10-mg-vial-dosage-protocol/',
   phases:[{w:[1,26],mcg:2000}],

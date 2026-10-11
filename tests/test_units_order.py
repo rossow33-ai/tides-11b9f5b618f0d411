@@ -16,7 +16,7 @@ with sync_playwright() as p:
         if abs(ua-exp(a,v))>1e-6 or abs(ub-exp(bb,v))>1e-6: fails.append(('ref',n,v,ua,ub))
     lib=pg.evaluate("units({vialMg:10,bacMl:2},5000)")
     known={'SS-31 5mg/10mg':(pg.evaluate("sgUnits(5000,10)"),100),'SS-31 10mg/10mg':(pg.evaluate("sgUnits(10000,10)"),200),'library 5mg/10mg':(lib,100),
-           'Reta 2mg/10mg':(pg.evaluate("sgUnits(2000,10)"),40),'NAD 50mg/500mg':(pg.evaluate("sgUnits(50000,500)"),20),'MT2 250mcg/10mg':(pg.evaluate("sgUnits(250,10)"),5)}
+           'Reta 2mg/10mg':(pg.evaluate("sgUnits(2000,10)"),40),'NAD 50mg/500mg @3mL':(pg.evaluate("sgUnits(50000,500,'NAD+')"),30),'NAD bacFor':(pg.evaluate("bacFor('NAD+',500)"),3),'BPC bacFor':(pg.evaluate("bacFor('BPC-157',10)"),2),'MT2 250mcg/10mg':(pg.evaluate("sgUnits(250,10)"),5)}
     for k,(got,want) in known.items():
         if abs(got-want)>1e-6: fails.append(('known',k,got,want))
     print('unit checks:',len(sg),'schedule cells,',len(ref),'reference rows,',len(known),'known values')
