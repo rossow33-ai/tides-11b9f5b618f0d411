@@ -137,3 +137,17 @@ dialog::backdrop{background:rgba(3,20,45,.65)}
 #toast{background:#8FD3FF;color:#062b57}
 .bars i{background:#8FD3FF}
 a{color:#c8ebff}
+
+/* v29 simple */
+.btn.big{width:100%;padding:15px;font-size:17px;margin:4px 0 8px}
+.subline{display:block;font-size:13px;color:#FFD166;margin:2px 0 6px;cursor:pointer}
+.slothd{margin:16px 0 6px;font-weight:700;letter-spacing:.04em;color:#cfe6ff}
+.trow2{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px;margin-bottom:8px}
+.trow2.done{opacity:.6}.trow2 .sp{cursor:pointer;min-width:0}
+.chk{width:34px;height:34px;flex:none;border-radius:50%;border:2px solid #cfe6ff;background:none;color:#062b57;font-size:18px;font-weight:800;cursor:pointer}
+.chk.on{background:#9af0b8;border-color:#9af0b8}
+.pill.slot{border:0;cursor:pointer;font-weight:700;padding:5px 10px;border-radius:99px;font-size:12px}
+.pill.slot.AM{background:#FFD166;color:#3a2a00}.pill.slot.PM{background:#3b2a7a;color:#fff;border:1px solid #a99bff}
+input.tm{width:auto;padding:4px 6px;font-size:13px;margin-left:4px;background:rgba(3,25,55,.45)}
+.pcard{cursor:pointer}.pcard .row{gap:6px;align-items:center}
+details.info{display:inline-block;margin-top:6px}details.info summary{list-style:none;cursor:pointer;color:#cfe6ff;font-size:15px}details.info summary::-webkit-details-marker{display:none}details.info[open]{display:block}
