@@ -51,7 +51,7 @@ function render(){charts.forEach(c=>c.destroy());charts=[];
  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
  const W=tab==='wind',td=document.getElementById('tide');document.documentElement.classList.toggle('wind',W);if(td){const was=td.style.display==='block';td.style.display=W?'block':'none';if(W&&!was&&window.tideShow)tideShow()}if(W)return;
  $('#hdrDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
- $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested})[tab]()+'<p class="disc">⚠️ For personal record-keeping only. Not medical advice. Consult a qualified healthcare professional.</p>';
+ $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested,recon})[tab]()+'<p class="disc">⚠️ For personal record-keeping only. Not medical advice. Consult a qualified healthcare professional.</p>';
  if(tab==='history')drawCharts()}
 function empty(msg,btn){return`<div class="card muted" style="text-align:center;padding:30px">${msg}<br><br>${btn||''}</div>`}
 
@@ -130,7 +130,7 @@ function inventory(){return`<h2>Inventory</h2>${S.peptides.length?S.peptides.map
  <div class="muted" style="margin-top:4px">${fmt(p.remainingMg||0,2)} mg left in open vial · ${p.vials||0} sealed · ${isFinite(st.daysLeft)?'~'+Math.floor(st.daysLeft)+' days supply':'—'}</div><details><summary>Details & actions</summary><div class="grid" style="margin-top:8px"><div class="stat"><b>${fmt(p.remainingMg||0,2)} mg</b><span class="muted">in open vial (${Math.round(pct)}%)</span></div>
  <div class="stat"><b>${p.vials||0}</b><span class="muted">sealed vials</span></div><div class="stat"><b>${isFinite(st.daysLeft)?Math.floor(st.daysLeft)+'d':'—'}</b><span class="muted">est. supply</span></div>
  <div class="stat"><b>${e?e.toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—'}</b><span class="muted">open vial expires</span></div></div>
- <div class="row" style="margin-top:10px"><button class="btn sm" onclick="openVial('${p.id}')">Open new vial</button><button class="btn sm ghost" onclick="addVials('${p.id}')">+ Add sealed vials</button><button class="btn sm ghost" onclick="pepDlg('${p.id}')">Edit</button></div></details></div>`}).join(''):empty('No peptides yet.')}`}
+ <div class="row" style="margin-top:10px"><button class="btn sm" onclick="openVial('${p.id}')">Open new vial</button> <button class="btn sm ghost" onclick="mixNow('${p.id}')">Mix / units</button><button class="btn sm ghost" onclick="addVials('${p.id}')">+ Add sealed vials</button><button class="btn sm ghost" onclick="pepDlg('${p.id}')">Edit</button></div></details></div>`}).join(''):empty('No peptides yet.')}`}
 window.openVial=id=>{const p=pep(id);if(!(p.vials>0)&&!confirm('No sealed vials recorded. Open anyway?'))return;if(p.vials>0)p.vials--;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();render();toast('New vial reconstituted')};
 window.addVials=id=>{const n=parseInt(prompt('How many sealed vials to add?','1'));if(n>0){pep(id).vials=(+pep(id).vials||0)+n;save();render()}};
 
@@ -159,7 +159,7 @@ window.pepDlg=id=>{const p=id?pep(id):{name:'',vialMg:5,bacMl:BAC(),vials:0,rema
  <label>Notes</label><textarea name="notes" rows="2">${esc(p.notes)}</textarea>
  ${id?`<button type="button" class="btn danger sm" style="margin-top:10px" onclick="delPep('${id}')">Delete peptide</button>`:''}`,v=>{
   ['vialMg','bacMl','remainingMg','vials','expiryDays','reorderAt'].forEach(k=>v[k]=+v[k]);
-  if(id)Object.assign(p,v);else S.peptides.push({id:uid(),...v});save();render();toast('Saved')})};
+  if(id)Object.assign(p,v);else{const nw={id:uid(),...v};S.peptides.push(nw);NEWQ.push(nw.id)}save();render();toast('Saved')})};
 window.delPep=id=>{if(!confirm('Delete peptide, its protocols and logs?'))return;S.peptides=S.peptides.filter(p=>p.id!==id);S.protocols=S.protocols.filter(r=>r.peptideId!==id);S.logs=S.logs.filter(l=>l.peptideId!==id);save();$('#dlg').close();render()};
 window.protoDlg=id=>{if(!S.peptides.length){pepDlg();return}const r=id?S.protocols.find(x=>x.id===id):{peptideId:S.peptides[0].id,doseMcg:250,freq:'daily',timesPerWeek:3,weekdays:[1,3,5],everyN:2,cycleOn:0,cycleOff:0,start:ymd(new Date()),end:'',time:'08:00',active:true};
  dlg(`<h2>${id?'Edit':'Add'} protocol</h2>${refPicker('proto',(pep(r.peptideId)||{}).name)}<label>Peptide</label><select name="peptideId">${S.peptides.map(p=>`<option value="${p.id}" ${p.id===r.peptideId?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
@@ -209,7 +209,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='23';
+const APP_VERSION='24';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -287,12 +287,12 @@ function suggested(){const g=SG();if(!g)return empty('Schedule data missing.');c
  <p class="muted">Red = over 100 units: more than one 1 mL U-100 syringe, so it needs 2 draws. AM/PM placement is not from the source. Educational reference only, not medical advice; review with a qualified clinician before starting.</p>`}
 const ORDERS={'order-20261011':{note:'Direct Peptides order 10/11/2026',items:[['Retatrutide',10,2],['Tesamorelin',10,2],['NAD+',500,2],['SS-31',10,2],['GLOW',70,1],['Melanotan II',10,2]]}};
 function applyItems(items,note){let np=0,nv=0;items.forEach(([name,mg,n,unit])=>{let p=S.peptides.find(x=>x.name.toLowerCase()===name.toLowerCase());
-  if(!p){p={id:uid(),name,vialMg:mg,bacMl:2,vials:0,remainingMg:0,reorderAt:1,expiryDays:EXP(),reconDate:'',notes:''};S.peptides.push(p);np++}
+  if(!p){p={id:uid(),name,vialMg:mg,bacMl:2,vials:0,remainingMg:0,reorderAt:1,expiryDays:EXP(),reconDate:'',notes:''};S.peptides.push(p);np++;NEWQ.push(p.id)}
   if(unit!=='iu'&&unit!=='mL')p.vialMg=mg;p.vials=(+p.vials||0)+n;nv+=n;p.notes=[(p.notes||'').replace('Vial size not confirmed; edit to match your vial.','').trim(),`${note}: ${n}× ${mg}${unit&&unit!=='mg'?' '+unit:' mg'}`].filter(Boolean).join(' · ')});save();return[np,nv]}
 window.applyItems=applyItems;
 function applyOrder(key){const o=ORDERS[key];S.settings.imports=S.settings.imports||{};if(S.settings.imports[key])return null;let np=0,nv=0;
  o.items.forEach(([name,mg,n])=>{let p=S.peptides.find(x=>x.name.toLowerCase()===name.toLowerCase());
-  if(!p){p={id:uid(),name,vialMg:mg,bacMl:2,vials:0,remainingMg:0,reorderAt:1,expiryDays:EXP(),reconDate:'',notes:''};S.peptides.push(p);np++}
+  if(!p){p={id:uid(),name,vialMg:mg,bacMl:2,vials:0,remainingMg:0,reorderAt:1,expiryDays:EXP(),reconDate:'',notes:''};S.peptides.push(p);np++;NEWQ.push(p.id)}
   p.vialMg=mg;p.vials=(+p.vials||0)+n;nv+=n;p.notes=((p.notes||'').replace('Vial size not confirmed; edit to match your vial.','').trim()+(p.notes?' · ':'')+o.note+`: ${n}× ${mg} mg`).replace(/^ · /,'')});
  S.settings.imports[key]=new Date().toISOString();save();return[np,nv]}
 window.applyOrder=applyOrder;
@@ -300,3 +300,28 @@ function handleAddHash(){const m=location.hash.match(/^#add=(.+)$/);if(!m)return
  if(ORDERS[m[1]]){const r=applyOrder(m[1]);window.history.replaceState(null,'',location.pathname);tab='inventory';render();toast(r?`Order added: ${r[1]} sealed vials${r[0]?`, ${r[0]} new peptides`:''}`:'Order already imported');return}if(m[1]==='suggested'){const[np,nr]=mergeAdd({protocols:sgProtocols()});history.replaceState(null,'',location.pathname);tab='suggested';render();toast(nr?`Added ${nr} paused protocols${np?`, ${np} peptides`:''}`:'Suggested schedule already added');return}try{let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
  const data=JSON.parse(decodeURIComponent(escape(atob(b))));const[np,nr]=mergeAdd(data);history.replaceState(null,'',location.pathname);tab='suggested';render();toast(`Imported ${np} peptides, ${nr} protocols (paused)`)}catch(e){console.warn('bad #add link',e)}}
 window.addEventListener('hashchange',handleAddHash);handleAddHash();
+
+// ---- Reconstitution screen (v24)
+let NEWQ=[],RQ={ids:[],i:0,bac:2,dose:null,id:null};
+window.mixFlow=ids=>{ids=ids.filter(id=>pep(id));if(!ids.length)return;RQ={ids,i:0,id:ids[0],bac:+pep(ids[0]).bacMl||BAC(),dose:null};tab='recon';render();scrollTo(0,0)};
+function reconDose(p){const r=S.protocols.find(x=>x.peptideId===p.id&&x.doseMcg);if(r)return +r.doseMcg;const i=refFind(p.name);if(i>=0){const e=REF()[i].entries.find(x=>x.minMcg!=null);if(e)return +e.minMcg}return 250}
+function syringe(u){const f=Math.min(u,100),W=300,x0=40,L=220,fx=x0+L*f/100;let t='';for(let k=0;k<=100;k+=5){const x=x0+L*k/100,big=k%10===0;t+=`<line x1="${x}" y1="18" x2="${x}" y2="${big?34:28}" stroke="#cfe6ff" stroke-width="${big?1.4:.8}"/>`+(k%20===0?`<text x="${x}" y="52" fill="#cfe6ff" font-size="10" text-anchor="middle">${k}</text>`:'')}
+ return`<svg viewBox="0 0 ${W} 60" width="100%" role="img" aria-label="Syringe filled to ${fmt(f,1)} units"><rect x="${x0}" y="14" width="${L}" height="24" rx="5" fill="rgba(255,255,255,.08)" stroke="#cfe6ff"/><rect x="${x0}" y="15" width="${Math.max(0,fx-x0)}" height="22" rx="4" fill="#8FD3FF" opacity=".75"/>${t}<rect x="${x0+L}" y="20" width="22" height="12" fill="#cfe6ff"/><rect x="${x0+L+22}" y="8" width="6" height="36" fill="#cfe6ff"/><line x1="${x0}" y1="26" x2="10" y2="26" stroke="#cfe6ff" stroke-width="2"/><rect x="${fx-2}" y="10" width="4" height="32" fill="#FFD166"/></svg>`}
+function recon(){const p=pep(RQ.id);if(!p){tab='inventory';return inventory()}
+ if(RQ.dose==null)RQ.dose=reconDose(p);const mg=+p.vialMg||0,bac=RQ.bac,c=bac>0?mg/bac:0,u=c?RQ.dose/(c*1000)*100:0,per=RQ.dose>0?Math.floor(mg*1000/RQ.dose):0,ri=refFind(p.name),g=ri>=0?REF()[ri]:null;
+ const n=RQ.ids.length,last=RQ.i>=n-1;
+ return`<h2>Mix ${esc(p.name)}${n>1?` <span class="muted">${RQ.i+1} of ${n}</span>`:''}</h2>
+ <div class="card"><div class="row" style="gap:12px;flex-wrap:wrap"><div><label>Vial (mg)</label><input type="number" min="0" step="any" value="${mg}" style="width:110px" onchange="pep('${p.id}').vialMg=+this.value||0;save();render()"></div>
+ <div><label>BAC water (mL)</label><div class="row" style="gap:6px">${[1,2,3].map(v=>`<button class="btn sm ${bac===v?'':'ghost'}" onclick="RQ.bac=${v};render()">${v} mL</button>`).join('')}<input type="number" min="0.1" step="0.1" value="${bac}" style="width:80px" onchange="RQ.bac=+this.value||2;render()"></div></div></div>
+ <div class="row" style="gap:18px;margin-top:12px;flex-wrap:wrap"><div><div class="muted">Concentration</div><b style="font-size:20px">${fmt(c,3)} mg/mL</b></div><div><div class="muted">Per unit</div><b style="font-size:20px">${fmt(c*10,2)} mcg/u</b></div></div></div>
+ <div class="card"><label>Target dose (mcg)</label><input type="number" min="0" step="any" value="${RQ.dose}" onchange="RQ.dose=+this.value||0;render()">
+ <div style="margin:12px 0 4px;font-size:26px;font-weight:700;color:var(--ac)">${fmt(u,1)} units${u>100?' <span class="pill bad">2 draws</span>':''}</div>${syringe(u)}
+ <div class="muted">U-100 insulin syringe · about ${per} doses per vial</div>
+ ${g?`<div class="refbox" style="margin-top:10px"><b>Reference</b>: ${[...new Set(g.entries.map(e=>e.doseRange+' · '+e.freq))].map(esc).join('; ')}<div class="muted"><a href="${esc(g.entries[0].url||'#')}" target="_blank" rel="noopener">Source: peptidedosages.com</a></div></div>`:'<div class="muted" style="margin-top:8px">No Reference entry for this peptide.</div>'}</div>
+ <div class="card"><b>Mixing checklist</b>${['Wash hands; swab both vial tops with alcohol and let dry','Draw '+fmt(bac,2)+' mL bacteriostatic water','Inject slowly down the inside wall of the peptide vial','Swirl gently until clear; do not shake','Label with today\'s date and refrigerate (2–8 °C)'].map((s,k)=>`<label style="display:flex;align-items:flex-start;gap:10px;margin:10px 0;font-size:15px;color:#fff"><input type="checkbox" style="width:20px;height:20px;margin:2px 0 0;flex:none"><span>${k+1}. ${esc(s)}</span></label>`).join('')}</div>
+ <div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="markMixed('${p.id}')">Mark vial mixed today</button><button class="btn ghost" onclick="reconNext()">${last?'Done':'Next peptide ›'}</button></div>
+ <p class="muted" style="margin-top:10px">${p.reconDate?`Current vial mixed ${esc(p.reconDate)}, expires ${expiry(p).toLocaleDateString()}. `:''}Sealed vials on hand: ${+p.vials||0}.</p>`}
+window.markMixed=id=>{const p=pep(id);if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();render();toast('Vial mixed · expires '+expiry(p).toLocaleDateString())};
+window.reconNext=()=>{const p=pep(RQ.id);if(p&&!p.reconDate){p.bacMl=RQ.bac;save()}if(RQ.i<RQ.ids.length-1){RQ.i++;RQ.id=RQ.ids[RQ.i];RQ.bac=+pep(RQ.id).bacMl||BAC();RQ.dose=null;render();scrollTo(0,0)}else{tab='inventory';render();scrollTo(0,0)}};
+window.mixNow=id=>mixFlow([id]);
+const _r3=render;render=function(){if(NEWQ.length){const q=NEWQ.splice(0);RQ={ids:q.filter(id=>pep(id)),i:0,id:q[0],bac:+(pep(q[0])||{}).bacMl||BAC(),dose:null};if(RQ.ids.length)tab='recon'}_r3()};
