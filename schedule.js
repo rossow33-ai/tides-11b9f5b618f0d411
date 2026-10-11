@@ -1,0 +1,35 @@
+// Suggested schedule for Tom's order peptides. Every dose, frequency, titration step and cycle comes from
+// peptidedosages.com protocol pages (retrieved 2026-10-11). AM/PM slots are NOT from the site (it gives no
+// time-of-day guidance for these six) and are an even split chosen for convenience. Not medical advice.
+window.SUGGESTED={start:'2026-10-12',items:[
+ {key:'reta',name:'Retatrutide',alias:'GLP-3 RT',slot:'AM',days:[1],vials:[5,10,20,30,40,50,60],
+  url:'https://peptidedosages.com/single-peptide-dosages/retatrutide-10-mg-vial-dosage-protocol/',
+  phases:[{w:[1,4],mcg:2000},{w:[5,8],mcg:4000}],
+  site:'Once weekly, subcutaneous. Phase 3 (TRIUMPH) began at 2 mg and increased every four weeks (2 → 4 mg, then on toward 9 or 12 mg targets). Site notes a 2 mg start was better tolerated than a 4 mg start.',
+  why:'Weekly GLP-1-class: once on Mondays, AM. Only the first two 4-week steps are added; further escalation (6/8/9/12 mg) is left for you to decide.'},
+ {key:'ss31',name:'SS-31',slot:'AM',days:[0,1,2,3,4,5,6],vials:[10,30,50],
+  url:'https://peptidedosages.com/single-peptide-dosages/ss-31-10-mg-vial-dosage-protocol/',
+  phases:[{w:[1,2],mcg:5000},{w:[3,8],mcg:10000}],
+  site:'Once daily at a consistent time. Weeks 1–2: 5 mg, weeks 3–8: 10 mg. 8–12 week protocol; 15–20 mg/day only under medical supervision.',
+  why:'Site says "consistent time" only; placed AM to balance the split.'},
+ {key:'nad',name:'NAD+',slot:'AM',days:[0,1,2,3,4,5,6],vials:[500,1000],
+  url:'https://peptidedosages.com/single-peptide-dosages/nad-500-mg-10ml-vial-dosage-protocol/',
+  phases:[{w:[1,1],mcg:50000},{w:[2,2],mcg:75000},{w:[3,16],mcg:100000}],
+  site:'One administration per day. Week 1: 50 mg, week 2: 75 mg, weeks 3–16: 100 mg. Site labels this a community calculation schedule, not a validated subcutaneous protocol.',
+  why:'No timing on site; placed AM. Note: at 2 mL BAC a 500 mg vial is 250 mg/mL (site mixes 500 mg in 3 mL).'},
+ {key:'tesa',name:'Tesamorelin',slot:'PM',days:[0,1,2,3,4,5,6],vials:[5,10,20],
+  url:'https://peptidedosages.com/single-peptide-dosages/tesamorelin-10-mg-vial-dosage-protocol/',
+  phases:[{w:[1,26],mcg:2000}],
+  site:'2 mg once daily, subcutaneous (phase 3 trials, 26 weeks, extension to 52). No lower starting dose is listed.',
+  why:'Site gives no bedtime or empty-stomach guidance; placed PM as a split choice, not a site recommendation.'},
+ {key:'glow',name:'GLOW',slot:'PM',days:[0,1,2,3,4,5,6],vials:[70],
+  url:'https://peptidedosages.com/peptide-blend-dosages/glow-peptide-blend-70-mg-vial-dosage-protocol/',
+  phases:[{w:[1,4],mcg:2330}],
+  site:'2,330 mcg (2.33 mg) once daily for 4 weeks at a consistent time, then 2–4 weeks off. Blend of GHK-Cu, BPC-157 and TB-500 (about 1.7 / 0.33 / 0.33 mg per dose).',
+  why:'Site says "consistent time preferred"; placed PM. Off-weeks 5–8 are left unscheduled.'},
+ {key:'mt2',name:'Melanotan II',slot:'PM',days:[0,1,2,3,4,5,6],vials:[10],
+  url:'https://peptidedosages.com/single-peptide-dosages/melanotan-ii-10-mg-vial-dosage-protocol/',
+  phases:[{w:[1,1],mcg:250},{w:[2,2],mcg:500},{w:[3,3],mcg:750},{w:[4,8],mcg:1000}],
+  site:'Once daily during an 8-week loading phase: week 1 250 mcg, week 2 500, week 3 750, weeks 4–8 1000 mcg; then 1–2 injections per week for maintenance. "Timing: any consistent time."',
+  why:'Site says any consistent time; placed PM. Maintenance after week 8 is not added (needs your input).'}
+]};
