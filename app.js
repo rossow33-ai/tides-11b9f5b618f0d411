@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='34';
+const APP_VERSION='35';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -585,11 +585,12 @@ function parsePlan(text){const out={steps:[],freq:null,weekdays:null,timesPerWee
  const clauses=t.split(/,|;|\bthen\b|\band then\b|\n|\.(?!\d)|\bafter that\b/);let anyWeeks=false;
  clauses.forEach(c=>{let s=c,dose=null,weeks;const take=(re,fn)=>{const m=s.match(re);if(m){fn(m);s=s.replace(m[0],' ')}return m};
   take(/(\d+(?:\.\d+)?)\s*(mcg|mg|iu)\b/,m=>{dose=+m[1]*(m[2]==='mg'?1000:1)});
-  take(/\bweeks?\s*(\d+)\s*(?:-|to|through|thru)\s*(\d+)\b/,m=>{weeks=+m[2]-+m[1]+1})||take(/\b(?:for\s*)?(?:the\s*)?(?:first|next)?\s*(\d+)\s*(?:weeks?|wks?|w)\b/,m=>{weeks=+m[1]})||take(/\bweek\s*(\d+)\b/,()=>{weeks=1})||take(/\bfor\s*(\d+)\s*days?\b/,m=>{weeks=Math.max(1,Math.round(+m[1]/7))})||take(/\b(?:for\s*)?(\d+)\s*months?\b/,m=>{weeks=Math.round(+m[1]*4.345)});
+  take(/\b(?:weeks?|wks?)\s*(\d+)\s*(?:-|to|through|thru)\s*(\d+)\b/,m=>{weeks=+m[2]-+m[1]+1})||take(/\b(?:for\s*)?(?:the\s*)?(?:first|next)?\s*(\d+)\s*(?:weeks?|wks?|w)\b/,m=>{weeks=+m[1]})||take(/\b(?:week|wk)\s*(\d+)\b/,()=>{weeks=1})||take(/\bfor\s*(\d+)\s*days?\b/,m=>{weeks=Math.max(1,Math.round(+m[1]/7))})||take(/\b(?:for\s*)?(\d+)\s*months?\b/,m=>{weeks=Math.round(+m[1]*4.345)});
   take(/\b(?:ongoing|onward|onwards|after|indefinitely|forever|thereafter|on)\b/,()=>{});
   if(weeks)anyWeeks=true;
   if(dose!=null)out.steps.push({mcg:dose,weeks:weeks||null});else if(weeks&&out.steps.length&&!out.steps[out.steps.length-1].weeks)out.steps[out.steps.length-1].weeks=weeks;else if(weeks)out.unparsed.push(c.trim());
   const left=s.replace(/\b(and|for|at|the|a|an|of|start|starting|with|take|inject|dose|from|to|then|up|until|in|each|per|x|sub-?q|subcutaneous|im|units?|u)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();if(left)out.unparsed.push(left)});
+ if(/\b(ongoing|onwards?|indefinitely|thereafter|continue|continuing)\b/i.test(text)&&out.steps.length>0)out.steps[out.steps.length-1].weeks=null;
  if(!out.freq&&out.steps.length)out.freq='daily';if(out.time&&!out.slot)out.slot=out.time<'12:00'?'AM':'PM';if(out.slot&&!out.time)out.time=out.slot==='AM'?'08:00':'21:00';
  if(!out.steps.length)out.unparsed.unshift('no dose found');return out}
 window.parsePlan=parsePlan;
@@ -604,3 +605,30 @@ window.applyParsed=()=>{const txt=$('#ptxt').value,r=parsePlan(txt);RQ.planText=
  return h.replace('<div class="card" style="padding:10px 12px;margin-bottom:8px">',box+'<div class="card" style="padding:10px 12px;margin-bottom:8px">')}})();
 (function(){const _s=window.planSave;window.planSave=()=>{const p=pep(RQ.id),txt=RQ.planText;_s();if(txt&&p){p.planText=txt;S.protocols.forEach(r=>{if(r.peptideId===p.id&&r.active!==false)r.note='Plan: '+txt});save();render()}RQ.planText='';RQ.unparsed=null;RQ.showText=false}})();
 (function(){const _p=pdetail;pdetail=function(){const h=_p(),p=pep(DP);return p&&p.planText?h.replace('<b class="sp">Plan</b>',`<b class="sp">Plan</b>`).replace(/(<div class="card"><div class="row"><b class="sp">Plan<\/b>)/,`$1`).replace('<button class="btn sm" onclick="pdPlan',`<div class="muted" style="font-style:italic;margin:6px 0">“${esc(p.planText)}”</div><button class="btn sm" onclick="pdPlan`):h}})();
+
+// ---- v35 taper off
+function taperSteps(p,mode,wks,pct){const act=S.protocols.filter(r=>r.peptideId===p.id&&r.active!==false),cur=(curProto(p.id)||{}).doseMcg||0;if(!cur)return[];
+ let doses=[];if(mode==='ladder'){doses=[...new Set(act.map(r=>+r.doseMcg).filter(d=>d>0&&d<cur))].sort((a,b)=>b-a)}
+ if(!doses.length){let d=cur;const f=1-Math.min(90,Math.max(5,pct||50))/100;for(let i=0;i<12;i++){d=d*f;if(d<cur*0.12)break;doses.push(+(d>=1000?Math.round(d/50)*50:Math.round(d/5)*5))}}
+ return[cur,...doses].map(m=>({mcg:m,weeks:wks||2}))}
+window.startTaper=()=>{const p=pep(RQ.id);RQ.taperCfg=RQ.taperCfg||{mode:'ladder',wks:2,pct:50};const c=RQ.taperCfg;RQ.steps=taperSteps(p,c.mode,c.wks,c.pct);RQ.steps.shift();
+ if(!RQ.steps.length){const cur=(curProto(p.id)||{}).doseMcg||0;RQ.steps=taperSteps(p,'pct',c.wks,c.pct).slice(1)}
+ RQ.taper=true;RQ.start=ymd(new Date());render()};
+(function(){const _d=dplan;dplan=function(){let h=_d();if(tab!=='dplan')return h;const c=RQ.taperCfg||{mode:'ladder',wks:2,pct:50};
+ const box=RQ.taper?`<div class="card" style="border:1px solid #FFD166"><div class="row"><b class="sp">Taper off <span class="pill warn">Tapering</span></b><button class="btn sm ghost" onclick="RQ.taper=false;RQ.steps=null;planInit();render()">Cancel taper</button></div>
+ <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap"><select style="width:auto" onchange="RQ.taperCfg.mode=this.value;startTaper()"><option value="ladder" ${c.mode==='ladder'?'selected':''}>Reverse ladder</option><option value="pct" ${c.mode==='pct'?'selected':''}>% per step</option></select>
+ <label class="muted">wk/step</label><input type="number" min="1" value="${c.wks}" style="width:56px" onchange="RQ.taperCfg.wks=+this.value||2;startTaper()">
+ ${c.mode==='pct'?`<label class="muted">−%</label><input type="number" min="5" max="90" value="${c.pct}" style="width:60px" onchange="RQ.taperCfg.pct=+this.value||50;startTaper()">`:''}</div><div class="muted" style="font-size:12px;margin-top:4px">Starts today, then stops; the plan is marked completed after the last step.</div></div>`
+ :`<button class="btn sm ghost" style="margin:0 0 10px" onclick="RQ.taperCfg={mode:'ladder',wks:2,pct:50};startTaper()">↘ Taper off</button>`;
+ h=h.replace('<details class="card"',box+'<details class="card"');
+ if(RQ.taper){let off=0;RQ.steps.forEach(st=>off+=st.weeks||0);const d=dAdd(RQ.start,off*7);h=h.replace('<button class="btn sm ghost" onclick="const l=RQ.steps',`<div class="card" style="padding:10px 12px;margin-bottom:8px;border-style:dashed"><b>⏹ Stop</b> <span class="muted">· ${dFmt(d)}</span></div><button class="btn sm ghost" onclick="const l=RQ.steps`)}
+ return h}})();
+(function(){const _s=window.planSave;window.planSave=()=>{const tp=RQ.taper,id=RQ.id;if(tp)RQ.steps.forEach(st=>{if(!st.weeks)st.weeks=2});_s();if(tp){S.protocols.forEach(r=>{if(r.peptideId===id&&r.active!==false){r.taper=true;r.note='Taper off'}});save();render()}RQ.taper=false}})();
+function completeTapers(){const t=ymd(new Date());let ch=0;S.protocols.forEach(r=>{if(r.taper&&r.active!==false&&r.end&&r.end<t){const rest=S.protocols.some(x=>x.peptideId===r.peptideId&&x.taper&&x.active!==false&&(!x.end||x.end>=t));if(!rest){r.active=false;r.status='completed';ch++}}});
+ S.protocols.forEach(r=>{if(r.taper&&r.active===false&&!r.status&&r.end&&r.end<t){r.status='completed';ch++}});if(ch)save()}
+completeTapers();
+window.pdTaper=id=>{pdPlan(id);planInit();RQ.taperCfg={mode:'ladder',wks:2,pct:50};startTaper()};
+(function(){const _t=today;today=function(){const h=_t();const tp=new Set(S.protocols.filter(r=>r.taper&&r.active!==false).map(r=>r.peptideId));if(!tp.size)return h;
+ return h.replace(/<b>([^<]*)<\/b><div class="muted">/g,(m,nm)=>{const p=S.peptides.find(x=>esc(x.name)===nm);return p&&tp.has(p.id)?`<b>${nm}</b> <span class="pill warn" style="font-size:10px">Tapering</span><div class="muted">`:m})}})();
+(function(){const _p=pdetail;pdetail=function(){const h=_p(),p=pep(DP);if(!p)return h;const tp=S.protocols.some(r=>r.peptideId===p.id&&r.taper&&r.active!==false);
+ return h.replace('<button class="btn danger" onclick="delPep',`${S.protocols.some(r=>r.peptideId===p.id&&r.active!==false)&&!tp?`<button class="btn ghost" onclick="pdTaper('${p.id}')">↘ Taper off</button>`:''}${tp?'<span class="pill warn">Tapering</span>':''}<button class="btn danger" onclick="delPep`)}})();

@@ -12,6 +12,8 @@ CASES=[
  ('5mg daily for 2 weeks then 10mg daily', dict(steps=[[5000,2],[10000,None]],freq='daily')),
  ('100 mcg nightly for 30 days', dict(steps=[[100,4]],freq='daily',slot='PM')),
  ('2mg weekly, blah blah', dict(steps=[[2000,None]],freq='weekdays',unparsed_has='blah')),
+ ('Week 1: 1 mg\nWeeks 2-5: 2 mg\nWeeks 6-9: 4 mg', dict(steps=[[1000,1],[2000,4],[4000,4]],freq='daily')),
+ ('Wk 1: 1 mg\nWks 2–5: 2 mg\nWks 6–9: 4 mg then ongoing', dict(steps=[[1000,1],[2000,4],[4000,None]])),
  ('take it when I feel like it', dict(steps=[],unparsed_has='no dose found')),
 ]
 fails=[]
