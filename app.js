@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='32';
+const APP_VERSION='33';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -303,7 +303,7 @@ function applyOrder(key){const o=ORDERS[key];S.settings.imports=S.settings.impor
  S.settings.imports[key]=new Date().toISOString();save();return[np,nv]}
 window.applyOrder=applyOrder;
 function handleAddHash(){const m=location.hash.match(/^#add=(.+)$/);if(!m)return;
- if(m[1]==='plan-update-20261011'){history.replaceState(null,'',location.pathname);setTimeout(()=>applyPlanUpdate(m[1]),0);return}
+ if(m[1]==='plan-update-20261011'||m[1]==='plan-update-20261011b'){history.replaceState(null,'',location.pathname);setTimeout(()=>m[1].endsWith('b')?applyRetaB(m[1]):applyPlanUpdate(m[1]),0);return}
  if(ORDERS[m[1]]){const r=applyOrder(m[1]);window.history.replaceState(null,'',location.pathname);tab='inventory';render();toast(r?`Order added: ${r[1]} sealed vials${r[0]?`, ${r[0]} new peptides`:''}`:'Order already imported');return}if(m[1]==='suggested'){const[np,nr]=mergeAdd({protocols:sgProtocols()});history.replaceState(null,'',location.pathname);tab='suggested';render();toast(nr?`Added ${nr} paused protocols${np?`, ${np} peptides`:''}`:'Suggested schedule already added');return}try{let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
  const data=JSON.parse(decodeURIComponent(escape(atob(b))));const[np,nr]=mergeAdd(data);history.replaceState(null,'',location.pathname);tab='suggested';render();toast(`Imported ${np} peptides, ${nr} protocols (paused)`)}catch(e){console.warn('bad #add link',e)}}
 window.addEventListener('hashchange',handleAddHash);setTimeout(handleAddHash,0);
@@ -361,7 +361,7 @@ function slotFor(name){const i=refFind(name);if(i>=0){const t=JSON.stringify(REF
  for(const[re,sl,why]of SLOT_RULES)if(re.test(name))return{slot:sl,src:'app default',why};return{slot:'AM',src:'app default',why:'No timing guidance; morning default'}}
 function sgItem(name){const n=(name||'').toLowerCase();return(SG().items||[]).find(it=>it.name.toLowerCase()===n||(it.alias||'').toLowerCase()===n)}
 function planFor(name,mg){const sl=slotFor(name),it=sgItem(name),base={slot:sl.slot,slotSrc:sl.src,slotWhy:sl.why,time:sl.slot==='AM'?'08:00':'21:00'};
- if(it)return{...base,...(it.user&&it.user.slot?{slot:it.user.slot,slotSrc:'your setting',slotWhy:'your setting',time:it.user.slot==='AM'?'08:00':'21:00'}:{}),phases:it.phases.map(ph=>({w:ph.w,mcg:ph.mcg})),freq:it.days.length===7?'daily':'weekdays',weekdays:it.days.length===7?[]:it.days,timesPerWeek:1,src:it.user?'your setting':'site (titration from suggested schedule)',url:it.url};
+ if(it)return{...base,...(it.user&&it.user.slot?{slot:it.user.slot,slotSrc:'your setting',slotWhy:'your setting',time:it.user.slot==='AM'?'08:00':'21:00'}:{}),phases:it.phases.map(ph=>({w:ph.w,mcg:ph.mcg})),freq:it.days.length===7?'daily':'weekdays',weekdays:it.days.length===7?[]:(it.user&&it.user.anchor?[new Date().getDay()]:it.days),timesPerWeek:1,src:it.user?'your setting':'site (titration from suggested schedule)',url:it.url};
  const i=refFind(name);if(i>=0){const es=REF()[i].entries,e=es.find(x=>+x.vialMg===+mg&&x.minMcg!=null)||es.find(x=>x.minMcg!=null);
   if(e){const xw=e.appFreq==='xweek';return{...base,phases:[{w:null,mcg:+e.minMcg}],freq:xw?'xweek':'daily',timesPerWeek:+e.timesPerWeek||1,weekdays:[],src:'site reference low dose · '+e.freq,url:e.url}}}
  return{...base,phases:[{w:null,mcg:0}],freq:'daily',timesPerWeek:1,weekdays:[],src:'no Reference dose data',url:'',noDose:true}}
@@ -420,7 +420,7 @@ function autoPlan(p){const pl=planFor(p.name,p.vialMg),dose=pl.phases[0].mcg,r=s
 function pconfirm(){const c=RQ.conf;if(!c){tab='today';return today()}const more=RQ.ids.length&&RQ.i<RQ.ids.length-1;
  return`<h2>Vial mixed ✓</h2><div class="card" style="border:1px solid rgba(255,255,255,.4)"><div class="muted">${esc(c.title)}</div><div style="font-size:21px;font-weight:700;margin:6px 0">${esc(c.line)}</div>
  ${c.noDose?'<div class="pill warn" style="display:inline-block;margin:4px 0">⚠ No dose in the Reference: tap Edit plan to enter your dose</div>':''}${c.tit?`<div class="muted">${esc(c.tit)}</div>`:''}<details class="info"><summary>ⓘ</summary><div class="muted" style="font-size:12px">${esc(c.src)} · starting today. Not medical advice.</div></details></div>
- <div class="row" style="gap:10px"><button class="btn" onclick="pconfDone()">${more?'Next peptide ›':'Done'}</button><button class="btn ghost" onclick="tab='dplan';render();scrollTo(0,0)">Edit plan</button></div>`}
+ <div class="row" style="gap:10px"><button class="btn" onclick="pconfDone()">${more?'Next peptide ›':'Done'}</button><button class="btn ghost" onclick="RQ.steps=null;RQ.conf.edit=1;tab='dplan';render();scrollTo(0,0)">Edit plan</button></div>`}
 window.pconfDone=()=>{RQ.conf=null;if(RQ.ids.length&&RQ.i<RQ.ids.length-1){reconNext()}else{RQ.flow=false;RQ.ids=[];tab='today';render();scrollTo(0,0)}};
 
 // ---- v29 simplification: Today = AM/PM lists, Peptides = one list + detail
@@ -518,7 +518,7 @@ for(const fn of ['quickLog','dsSave','unlog']){const o=window[fn];window[fn]=(..
 
 // ---- v32 Tom's personal dosing defaults (override Reference/suggested)
 const USER_DEFAULTS={'ss-31':{slot:'AM',days:[0,1,2,3,4,5,6],phases:[{w:[1,8],mcg:2000}],note:'Your setting: 2 mg daily, flat (no titration).'},
- 'retatrutide':{phases:[{w:[1,4],mcg:1000},{w:[5,8],mcg:2000},{w:[9,12],mcg:4000}],note:'Your setting: start 1 mg weekly for 4 weeks, then the site\'s 2 mg → 4 mg steps.'}};
+ 'retatrutide':{anchor:true,phases:[{w:[1,1],mcg:1000},{w:[2,5],mcg:2000},{w:[6,12],mcg:4000}],note:'Your setting: 1 mg week 1 only, then the site\'s steps: 2 mg weeks 2–5, 4 mg from week 6. Weekly on the weekday of the first dose.'}};
 (SG().items||[]).forEach(it=>{const u=USER_DEFAULTS[it.name.toLowerCase()]||USER_DEFAULTS[(it.alias||'').toLowerCase()];if(!u)return;it.phases=u.phases;if(u.days)it.days=u.days;if(u.slot)it.slot=u.slot;it.user=u;it.site=u.note+' Site: '+it.site;it.why=(u.slot?'Your setting: '+u.slot+'. ':'')+it.why});
 function applyPlanUpdate(key){S.settings.imports=S.settings.imports||{};if(S.settings.imports[key]){tab='list';render();toast('Plan update already applied');return}
  const out=[];['SS-31','Retatrutide'].forEach(n=>{const p=S.peptides.find(x=>x.name.toLowerCase()===n.toLowerCase()||(n==='Retatrutide'&&/glp-?3/i.test(x.name)));if(!p)return;
@@ -527,3 +527,44 @@ function applyPlanUpdate(key){S.settings.imports=S.settings.imports||{};if(S.set
   if(act.length){savePlan(p,pl,pl.phases[0].mcg,'update');out.push(n)}
   else if(paused.length){S.protocols=S.protocols.filter(r=>!(r.peptideId===p.id&&r.active===false));savePlan(p,pl,pl.phases[0].mcg,'update');S.protocols.forEach(r=>{if(r.peptideId===p.id)r.active=false});out.push(n+' (paused)')}});
  S.settings.imports[key]=new Date().toISOString();save();tab='list';render();toast(out.length?'Updated: '+out.join(', '):'No SS-31/Retatrutide plans found')}
+
+// ---- v33 Retatrutide correction link: 1 mg wk1, 2 mg wk2-5, 4 mg wk6+, weekly on start weekday
+function applyRetaB(key){S.settings.imports=S.settings.imports||{};if(S.settings.imports[key]){tab='list';render();toast('Retatrutide update already applied');return}
+ const p=S.peptides.find(x=>/retatrutide|glp-?3/i.test(x.name));if(!p){toast('No Retatrutide found');return}
+ const mine=S.protocols.filter(r=>r.peptideId===p.id),act=mine.filter(r=>r.active!==false),use=act.length?act:mine;if(!use.length){toast('No Retatrutide plan to update');return}
+ const prev=S.settings.imports['plan-update-20261011'],ex=use.map(r=>r.start).filter(Boolean).sort()[0],t=ymd(new Date());
+ const start=prev&&ex?ex:t,sd=parseD(start),dow=sd.getDay(),active=act.length>0,time=use[0].time||'08:00';
+ const add=n=>{const d=parseD(start);d.setDate(d.getDate()+n);return ymd(d)},keepId=use[0].id;
+ S.protocols=S.protocols.filter(r=>!use.includes(r));
+ [[0,6,1000],[7,34,2000],[35,null,4000]].forEach(([a,b,mcg],k)=>S.protocols.push({id:k===0?keepId:uid(),peptideId:p.id,doseMcg:mcg,time,freq:'weekdays',weekdays:[dow],timesPerWeek:1,everyN:1,cycleOn:0,cycleOff:0,start:add(a),end:b==null?'':add(b),active,note:'Your setting: 1 mg wk 1, 2 mg wk 2–5, 4 mg wk 6+ (site steps)'}));
+ S.settings.imports[key]=new Date().toISOString();save();tab='list';render();toast(`Retatrutide: 1 mg ${add(0)}, 2 mg from ${add(7)}, 4 mg from ${add(35)}`)}
+
+// ---- v33 step editor for plans
+function stepsFromProtos(list){const ps=list.slice().sort((a,b)=>(a.start||'').localeCompare(b.start||''));return ps.map((r,k)=>({mcg:+r.doseMcg||0,weeks:k<ps.length-1&&r.start&&r.end?Math.max(1,Math.round((parseD(r.end)-parseD(r.start))/864e5+1)/7):null}))}
+function stepsFromPlan(pl,dose){return pl.phases.map((ph,k)=>({mcg:k===0?+dose||0:+ph.mcg,weeks:k<pl.phases.length-1&&ph.w?ph.w[1]-ph.w[0]+1:null}))}
+function planInit(){if(RQ.steps)return;const act=S.protocols.filter(r=>r.peptideId===RQ.id&&r.active!==false);
+ if(act.length){RQ.steps=stepsFromProtos(act);const f=act[0];RQ.plan=Object.assign(RQ.plan||{},{freq:f.freq,timesPerWeek:f.timesPerWeek||1,weekdays:f.weekdays||[],time:f.time||'08:00'});RQ.plan.slot=slotOf(RQ.plan.time);RQ.start=act.map(r=>r.start).filter(Boolean).sort()[0]||ymd(new Date())}
+ else{RQ.steps=stepsFromPlan(RQ.plan,RQ.dose);RQ.start=(act.map(r=>r.start).filter(Boolean).sort()[0])||ymd(new Date())}}
+const dAdd=(s,n)=>{const d=parseD(s);d.setDate(d.getDate()+n);return d};
+const dFmt=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+dplan=function(){const p=pep(RQ.id);if(!p||!RQ.plan){tab='today';return today()}planInit();const pl=RQ.plan;let off=0;
+ const rows=RQ.steps.map((st,k)=>{const last=k===RQ.steps.length-1,w=st.weeks,a=dAdd(RQ.start,off*7),b=w?dAdd(RQ.start,(off+w)*7-1):null;off+=w||0;const u=units(p,st.mcg);
+  return`<div class="card" style="padding:10px 12px;margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:nowrap">
+  <span class="muted" style="width:18px">${k+1}</span><input type="number" step="any" min="0" value="${fmt(st.mcg/1000,4)}" style="width:auto;flex:1;min-width:0" onchange="RQ.steps[${k}].mcg=(+this.value||0)*1000;render()" aria-label="Dose mg"><span>mg</span>
+  <input type="number" min="1" step="1" placeholder="∞" value="${w||''}" style="width:58px" onchange="RQ.steps[${k}].weeks=+this.value||null;render()" aria-label="Weeks"><span class="muted">wk</span>
+  <button class="btn sm ghost" ${RQ.steps.length<2?'disabled':''} onclick="RQ.steps.splice(${k},1);render()" aria-label="Delete step">✕</button></div>
+  <div class="muted" style="margin-top:4px">${fmt(u,1)}u${u>100?' · <span style="color:var(--bad)">2 draws</span>':''} · ${dFmt(a)} – ${b?dFmt(b):'ongoing'}${!w&&!last?' · <span style="color:#FFD166">set weeks</span>':''}</div></div>`}).join('');
+ return`<h2 style="justify-content:flex-start;gap:10px"><button class="btn sm ghost" onclick="tab=RQ.conf?'pconfirm':'pdetail';render()" aria-label="Back">‹</button>Plan · ${esc(p.name)}</h2>
+ <div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="pill slot ${pl.slot}" onclick="RQ.plan.slot=RQ.plan.slot==='AM'?'PM':'AM';RQ.plan.time=RQ.plan.slot==='AM'?'08:00':'21:00';render()">${pl.slot}</button>
+ <input class="tm" type="time" value="${pl.time}" onchange="RQ.plan.time=this.value;RQ.plan.slot=slotOf(this.value);render()">
+ <select style="width:auto" onchange="RQ.plan.freq=this.value;if(this.value==='weekdays'&&!(RQ.plan.weekdays||[]).length)RQ.plan.weekdays=[parseD(RQ.start).getDay()];render()"><option value="daily" ${pl.freq==='daily'?'selected':''}>Daily</option><option value="weekdays" ${pl.freq==='weekdays'?'selected':''}>Weekly (${pl.freq==='weekdays'?(pl.weekdays||[]).map(i=>DOW[i]).join(','):DOW[parseD(RQ.start).getDay()]})</option><option value="xweek" ${pl.freq==='xweek'?'selected':''}>× per week</option></select>
+ ${pl.freq==='xweek'?`<input type="number" min="1" max="7" value="${pl.timesPerWeek||1}" style="width:60px" onchange="RQ.plan.timesPerWeek=+this.value||1;render()">`:''}</div>
+ <label style="margin-top:8px">Start</label><input type="date" value="${RQ.start}" onchange="RQ.start=this.value||ymd(new Date());if(RQ.plan.freq==='weekdays')RQ.plan.weekdays=[parseD(RQ.start).getDay()];render()"></div>
+ ${rows}<button class="btn sm ghost" onclick="const l=RQ.steps[RQ.steps.length-1];if(!l.weeks)l.weeks=4;RQ.steps.push({mcg:l.mcg,weeks:null});render()">+ Add step</button>
+ <div class="row" style="gap:10px;margin-top:14px"><button class="btn" onclick="planSave()">Save plan</button><button class="btn ghost" onclick="tab=RQ.conf?'pconfirm':'pdetail';render();scrollTo(0,0)">Cancel</button></div>`};
+window.planSave=()=>{const p=pep(RQ.id),pl=RQ.plan;const old=S.protocols.filter(r=>r.peptideId===p.id&&r.active!==false),keepId=old[0]&&old[0].id;
+ S.protocols=S.protocols.filter(r=>!(r.peptideId===p.id&&r.active!==false));let off=0;
+ RQ.steps.forEach((st,k)=>{const w=k<RQ.steps.length-1?(st.weeks||1):st.weeks,a=dAdd(RQ.start,off*7),b=w?dAdd(RQ.start,(off+w)*7-1):null;off+=w||0;
+  S.protocols.push({id:k===0&&keepId?keepId:uid(),peptideId:p.id,doseMcg:+st.mcg,time:pl.time,freq:pl.freq,timesPerWeek:+pl.timesPerWeek||1,everyN:1,weekdays:pl.freq==='weekdays'?(pl.weekdays&&pl.weekdays.length?pl.weekdays:[parseD(RQ.start).getDay()]):[],cycleOn:0,cycleOff:0,start:ymd(a),end:b?ymd(b):'',active:true,note:(old[0]&&old[0].note)||'Edited plan'})});
+ let o2=0;const ph=RQ.steps.map(st=>{const w=st.weeks,r={w:w?[o2+1,o2+w]:[o2+1,o2+1],mcg:st.mcg};o2+=w||0;return r});save();RQ.steps=null;if(RQ.conf){RQ.conf=confText(p,{...pl,phases:ph},ph[0].mcg,true);tab='pconfirm'}else{DP=p.id;tab='pdetail'}render();scrollTo(0,0);toast('Plan saved')};
+window.pdPlan=id=>{const p=pep(id),pl=planFor(p.name,p.vialMg);RQ={ids:[],i:0,id,flow:false,plan:pl,dose:pl.phases[0].mcg,keep:'update',bac:p.bacMl,steps:null,conf:null};DP=id;tab='dplan';render();scrollTo(0,0)};
