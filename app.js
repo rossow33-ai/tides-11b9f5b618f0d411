@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='33';
+const APP_VERSION='34';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -568,3 +568,39 @@ window.planSave=()=>{const p=pep(RQ.id),pl=RQ.plan;const old=S.protocols.filter(
   S.protocols.push({id:k===0&&keepId?keepId:uid(),peptideId:p.id,doseMcg:+st.mcg,time:pl.time,freq:pl.freq,timesPerWeek:+pl.timesPerWeek||1,everyN:1,weekdays:pl.freq==='weekdays'?(pl.weekdays&&pl.weekdays.length?pl.weekdays:[parseD(RQ.start).getDay()]):[],cycleOn:0,cycleOff:0,start:ymd(a),end:b?ymd(b):'',active:true,note:(old[0]&&old[0].note)||'Edited plan'})});
  let o2=0;const ph=RQ.steps.map(st=>{const w=st.weeks,r={w:w?[o2+1,o2+w]:[o2+1,o2+1],mcg:st.mcg};o2+=w||0;return r});save();RQ.steps=null;if(RQ.conf){RQ.conf=confText(p,{...pl,phases:ph},ph[0].mcg,true);tab='pconfirm'}else{DP=p.id;tab='pdetail'}render();scrollTo(0,0);toast('Plan saved')};
 window.pdPlan=id=>{const p=pep(id),pl=planFor(p.name,p.vialMg);RQ={ids:[],i:0,id,flow:false,plan:pl,dose:pl.phases[0].mcg,keep:'update',bac:p.bacMl,steps:null,conf:null};DP=id;tab='dplan';render();scrollTo(0,0)};
+
+// ---- v34 plain-text plan parser (on-device heuristics)
+function parsePlan(text){const out={steps:[],freq:null,weekdays:null,timesPerWeek:1,slot:null,time:null,unparsed:[]};if(!text||!text.trim())return out;
+ const NUM={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,once:1,twice:2,thrice:3};
+ let t=' '+text.toLowerCase().replace(/[–—]/g,'-').replace(/µg|ug\b/g,'mcg').replace(/\b(one|two|three|four|five|six|seven)\b/g,m=>NUM[m])+' ';
+ const glob=[[/\b(\d+)\s*days?\s*on\s*,?\s*(\d+)\s*(?:days?\s*)?off\b/,m=>{const on=+m[1],off=+m[2];if(on+off===7){out.freq='weekdays';out.weekdays=[1,2,3,4,5,6,0].slice(0,on)}else out.unparsed.push(m[0].trim())}],
+  [/\b(?:every\s*other\s*day|eod)\b/,()=>{out.freq='xweek';out.timesPerWeek=3.5}],
+  [/\b(\d+)\s*(?:x|times)\s*(?:a|per|\/)\s*week\b|\b(\d+)x\s*\/\s*w(?:ee)?k\b|\b(once|twice|thrice)\s*(?:a|per)\s*week\b/,m=>{const n=+(m[1]||m[2])||NUM[m[3]]||1;if(n===1){out.freq='weekdays'}else{out.freq='xweek';out.timesPerWeek=n}}],
+  [/\b(?:weekly|every\s*week|per\s*week|a\s*week|each\s*week)\b/,()=>{if(!out.freq)out.freq='weekdays'}],
+  [/\b(?:daily|every\s*day|each\s*day|nightly|a\s*day|per\s*day|qd)\b/,m=>{if(/nightly/.test(m[0]))out.slot=out.slot||'PM';if(!out.freq)out.freq='daily'}],
+  [/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/,m=>{let h=+m[1]%12+(m[3]==='pm'?12:0);out.time=String(h).padStart(2,'0')+':'+(m[2]||'00');out.slot=m[3].toUpperCase()}],
+  [/\b(?:am|morning|mornings|breakfast|wake)\b/,()=>{out.slot=out.slot||'AM'}],
+  [/\b(?:pm|night|nightly|bedtime|bed|evening|evenings|before\s*sleep)\b/,()=>{out.slot=out.slot||'PM'}]];
+ for(const[re,fn]of glob){const g=new RegExp(re.source,'g');let m;while((m=g.exec(t))){fn(m);t=t.slice(0,m.index)+' '.repeat(m[0].length)+t.slice(m.index+m[0].length);g.lastIndex=m.index+m[0].length}}
+ const clauses=t.split(/,|;|\bthen\b|\band then\b|\n|\.(?!\d)|\bafter that\b/);let anyWeeks=false;
+ clauses.forEach(c=>{let s=c,dose=null,weeks;const take=(re,fn)=>{const m=s.match(re);if(m){fn(m);s=s.replace(m[0],' ')}return m};
+  take(/(\d+(?:\.\d+)?)\s*(mcg|mg|iu)\b/,m=>{dose=+m[1]*(m[2]==='mg'?1000:1)});
+  take(/\bweeks?\s*(\d+)\s*(?:-|to|through|thru)\s*(\d+)\b/,m=>{weeks=+m[2]-+m[1]+1})||take(/\b(?:for\s*)?(?:the\s*)?(?:first|next)?\s*(\d+)\s*(?:weeks?|wks?|w)\b/,m=>{weeks=+m[1]})||take(/\bweek\s*(\d+)\b/,()=>{weeks=1})||take(/\bfor\s*(\d+)\s*days?\b/,m=>{weeks=Math.max(1,Math.round(+m[1]/7))})||take(/\b(?:for\s*)?(\d+)\s*months?\b/,m=>{weeks=Math.round(+m[1]*4.345)});
+  take(/\b(?:ongoing|onward|onwards|after|indefinitely|forever|thereafter|on)\b/,()=>{});
+  if(weeks)anyWeeks=true;
+  if(dose!=null)out.steps.push({mcg:dose,weeks:weeks||null});else if(weeks&&out.steps.length&&!out.steps[out.steps.length-1].weeks)out.steps[out.steps.length-1].weeks=weeks;else if(weeks)out.unparsed.push(c.trim());
+  const left=s.replace(/\b(and|for|at|the|a|an|of|start|starting|with|take|inject|dose|from|to|then|up|until|in|each|per|x|sub-?q|subcutaneous|im|units?|u)\b/g,' ').replace(/[^a-z0-9]+/g,' ').trim();if(left)out.unparsed.push(left)});
+ if(!out.freq&&out.steps.length)out.freq='daily';if(out.time&&!out.slot)out.slot=out.time<'12:00'?'AM':'PM';if(out.slot&&!out.time)out.time=out.slot==='AM'?'08:00':'21:00';
+ if(!out.steps.length)out.unparsed.unshift('no dose found');return out}
+window.parsePlan=parsePlan;
+window.applyParsed=()=>{const txt=$('#ptxt').value,r=parsePlan(txt);RQ.planText=txt;RQ.unparsed=r.unparsed;
+ if(r.steps.length){RQ.steps=r.steps;const n=RQ.steps.length;if(n>1)RQ.steps.forEach((s,k)=>{if(k<n-1&&!s.weeks)s.weeks=1})}
+ if(r.freq){RQ.plan.freq=r.freq;RQ.plan.weekdays=r.freq==='weekdays'?(r.weekdays||[parseD(RQ.start).getDay()]):[];RQ.plan.timesPerWeek=r.timesPerWeek}
+ if(r.slot){RQ.plan.slot=r.slot;RQ.plan.time=r.time}RQ.showText=true;render()};
+(function(){const _d=dplan;dplan=function(){const h=_d();if(tab!=='dplan')return h;const box=`<details class="card" ${RQ.showText?'open':''}><summary style="cursor:pointer;font-weight:700">✎ Type plan as text</summary>
+ <textarea id="ptxt" rows="3" placeholder="e.g. 1mg week 1, 2mg weeks 2-5, then 4mg weekly" style="margin-top:8px">${esc(RQ.planText||'')}</textarea>
+ <div class="row" style="margin-top:8px"><button class="btn sm" onclick="applyParsed()">Parse</button><span class="muted" style="font-size:12px">On-device; check the steps below.</span></div>
+ ${RQ.unparsed&&RQ.unparsed.length?`<div style="margin-top:8px;background:rgba(255,209,102,.18);border:1px solid #FFD166;border-radius:10px;padding:8px;font-size:13px">⚠ Not understood: ${RQ.unparsed.map(x=>`<b>${esc(x)}</b>`).join(', ')}. Fix below.</div>`:''}</details>`;
+ return h.replace('<div class="card" style="padding:10px 12px;margin-bottom:8px">',box+'<div class="card" style="padding:10px 12px;margin-bottom:8px">')}})();
+(function(){const _s=window.planSave;window.planSave=()=>{const p=pep(RQ.id),txt=RQ.planText;_s();if(txt&&p){p.planText=txt;S.protocols.forEach(r=>{if(r.peptideId===p.id&&r.active!==false)r.note='Plan: '+txt});save();render()}RQ.planText='';RQ.unparsed=null;RQ.showText=false}})();
+(function(){const _p=pdetail;pdetail=function(){const h=_p(),p=pep(DP);return p&&p.planText?h.replace('<b class="sp">Plan</b>',`<b class="sp">Plan</b>`).replace(/(<div class="card"><div class="row"><b class="sp">Plan<\/b>)/,`$1`).replace('<button class="btn sm" onclick="pdPlan',`<div class="muted" style="font-style:italic;margin:6px 0">“${esc(p.planText)}”</div><button class="btn sm" onclick="pdPlan`):h}})();
