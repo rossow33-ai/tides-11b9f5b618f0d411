@@ -135,13 +135,13 @@ function inventory(){return`<h2>Inventory</h2><button class="btn" style="width:1
 window.openVial=id=>{const p=pep(id);if(!(p.vials>0)&&!confirm('No sealed vials recorded. Open anyway?'))return;if(p.vials>0)p.vials--;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();render();toast('New vial reconstituted')};
 window.addVials=id=>{const n=parseInt(prompt('How many sealed vials to add?','1'));if(n>0){pep(id).vials=(+pep(id).vials||0)+n;save();render()}};
 
-function data(){return`<h2>Data</h2><div class="card"><h3>Backup</h3><p class="muted">All data lives only in this browser (localStorage). Export regularly.</p>
+function data(){return`<h2>Data</h2><div class="card"><h3>Backup</h3><p class="muted">Stored only on this device. Last backup: <b>${S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString():"never"}</b></p><p class="muted" style="font-size:12px">Saves as tides-backup.json. In Files, pick the same folder and tap Replace (iOS may add “ 2” otherwise).</p>
  <div class="row"><button class="btn" onclick="exportJSON()">Export JSON</button><button class="btn ghost" onclick="exportCSV()">Export logs CSV</button>
  <label class="btn ghost" style="margin:0;color:var(--tx)">Import JSON<input type="file" accept=".json,application/json" hidden onchange="importJSON(this)"></label></div></div>
   <div class="card"><h3>Stats</h3><div class="muted">${S.peptides.length} peptides · ${S.protocols.length} protocols · ${S.logs.length} logs</div></div>
  <div class="card"><h3>Demo / reset</h3><div class="row"><button class="btn ghost" onclick="loadDemo()">Load demo data</button><button class="btn danger" onclick="if(confirm('Delete ALL data?')){S={peptides:[],protocols:[],logs:[],settings:{}};save();render()}">Erase everything</button></div></div>`}
 function dl(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-window.exportJSON=()=>dl(`peptide-tracker-${ymd(new Date())}.json`,JSON.stringify({app:'PeptideTracker',version:1,exported:new Date().toISOString(),...S},null,2),'application/json');
+window.exportJSON=()=>saveBackup();
 window.exportCSV=()=>{const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;const rows=[['datetime','peptide','dose_mcg','units','site','side_effects','notes']];
  S.logs.slice().sort((a,b)=>a.ts-b.ts).forEach(l=>{const p=pep(l.peptideId);rows.push([new Date(l.ts).toISOString(),p?p.name:'',l.doseMcg,p?fmt(units(p,l.doseMcg),1):'',l.site,l.side,l.notes])});
  dl(`peptide-logs-${ymd(new Date())}.csv`,rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv')};
@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='31';
+const APP_VERSION='32';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -303,9 +303,10 @@ function applyOrder(key){const o=ORDERS[key];S.settings.imports=S.settings.impor
  S.settings.imports[key]=new Date().toISOString();save();return[np,nv]}
 window.applyOrder=applyOrder;
 function handleAddHash(){const m=location.hash.match(/^#add=(.+)$/);if(!m)return;
+ if(m[1]==='plan-update-20261011'){history.replaceState(null,'',location.pathname);setTimeout(()=>applyPlanUpdate(m[1]),0);return}
  if(ORDERS[m[1]]){const r=applyOrder(m[1]);window.history.replaceState(null,'',location.pathname);tab='inventory';render();toast(r?`Order added: ${r[1]} sealed vials${r[0]?`, ${r[0]} new peptides`:''}`:'Order already imported');return}if(m[1]==='suggested'){const[np,nr]=mergeAdd({protocols:sgProtocols()});history.replaceState(null,'',location.pathname);tab='suggested';render();toast(nr?`Added ${nr} paused protocols${np?`, ${np} peptides`:''}`:'Suggested schedule already added');return}try{let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
  const data=JSON.parse(decodeURIComponent(escape(atob(b))));const[np,nr]=mergeAdd(data);history.replaceState(null,'',location.pathname);tab='suggested';render();toast(`Imported ${np} peptides, ${nr} protocols (paused)`)}catch(e){console.warn('bad #add link',e)}}
-window.addEventListener('hashchange',handleAddHash);handleAddHash();
+window.addEventListener('hashchange',handleAddHash);setTimeout(handleAddHash,0);
 
 // ---- Reconstitution screen (v24)
 
@@ -360,7 +361,7 @@ function slotFor(name){const i=refFind(name);if(i>=0){const t=JSON.stringify(REF
  for(const[re,sl,why]of SLOT_RULES)if(re.test(name))return{slot:sl,src:'app default',why};return{slot:'AM',src:'app default',why:'No timing guidance; morning default'}}
 function sgItem(name){const n=(name||'').toLowerCase();return(SG().items||[]).find(it=>it.name.toLowerCase()===n||(it.alias||'').toLowerCase()===n)}
 function planFor(name,mg){const sl=slotFor(name),it=sgItem(name),base={slot:sl.slot,slotSrc:sl.src,slotWhy:sl.why,time:sl.slot==='AM'?'08:00':'21:00'};
- if(it)return{...base,phases:it.phases.map(ph=>({w:ph.w,mcg:ph.mcg})),freq:it.days.length===7?'daily':'weekdays',weekdays:it.days.length===7?[]:it.days,timesPerWeek:1,src:'site (titration from suggested schedule)',url:it.url};
+ if(it)return{...base,...(it.user&&it.user.slot?{slot:it.user.slot,slotSrc:'your setting',slotWhy:'your setting',time:it.user.slot==='AM'?'08:00':'21:00'}:{}),phases:it.phases.map(ph=>({w:ph.w,mcg:ph.mcg})),freq:it.days.length===7?'daily':'weekdays',weekdays:it.days.length===7?[]:it.days,timesPerWeek:1,src:it.user?'your setting':'site (titration from suggested schedule)',url:it.url};
  const i=refFind(name);if(i>=0){const es=REF()[i].entries,e=es.find(x=>+x.vialMg===+mg&&x.minMcg!=null)||es.find(x=>x.minMcg!=null);
   if(e){const xw=e.appFreq==='xweek';return{...base,phases:[{w:null,mcg:+e.minMcg}],freq:xw?'xweek':'daily',timesPerWeek:+e.timesPerWeek||1,weekdays:[],src:'site reference low dose · '+e.freq,url:e.url}}}
  return{...base,phases:[{w:null,mcg:0}],freq:'daily',timesPerWeek:1,weekdays:[],src:'no Reference dose data',url:'',noDose:true}}
@@ -499,3 +500,30 @@ function syr1(u){u=Math.max(0,Math.min(100,u));const X0=44,L=180,k=L/100,fx=X0+u
  <rect x="${rodEnd.toFixed(1)}" y="${cy-15}" width="6" height="30" rx="2" fill="#f4f8fc" stroke="#cfe6ff" stroke-width=".6"/></svg>`}
 function syringeView(u){if(!(u>0))return syr1(0);if(u<=100.0001)return syr1(u);const n=Math.ceil(u/100-1e-9);let h='',left=u;for(let i=0;i<n;i++){const v=Math.min(100,left);left-=v;h+=`<div class="muted" style="font-size:12px;margin-top:4px">Draw ${i+1}: ${fmt(v,1)}u</div>`+syr1(v)}
  return`<div class="pill bad" style="display:inline-block;margin:4px 0">${n} draws</div>`+h}
+
+// ---- v32 backup prompt + fixed-name backup
+function backupText(){return JSON.stringify({app:'Tides',version:1,exported:new Date().toISOString(),...S},null,2)}
+window.saveBackup=async()=>{const txt=backupText(),name='tides-backup.json',f=new File([txt],name,{type:'application/json'});
+ const mark=()=>{S.settings.lastBackup=Date.now();save();if(tab==='data')render();toast('Backup saved')};
+ if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Tides backup'});mark();return}catch(e){if(e&&e.name==='AbortError')return}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);mark()};
+function dueToday(){const d=new Date(),it=[];S.protocols.forEach(r=>{if(!isDue(r,d))return;const p=pep(r.peptideId);if(!p)return;it.push(r.freq==='xweek'?weekLogs(r,d)>=r.timesPerWeek:logsOn(p.id,d).some(l=>l.protocolId===r.id))});return it}
+function checkAllDone(){const it=dueToday(),k=ymd(new Date()),all=it.length&&it.every(Boolean);
+ if(!all){if(S.settings.bkPrompt===k){delete S.settings.bkPrompt;save()}return}
+ if(S.settings.bkPrompt===k)return;S.settings.bkPrompt=k;save();
+ let d=$('#bkDlg');if(!d){d=document.createElement('dialog');d.id='bkDlg';document.body.appendChild(d)}
+ d.innerHTML=`<h3 style="margin:0 0 6px">All done today ✓</h3><p style="margin:0 0 4px">Save backup?</p><p class="muted" style="font-size:12px;margin:0 0 12px">Saves tides-backup.json. Pick the same folder and choose Replace.</p>
+ <div class="row" style="gap:10px;justify-content:flex-end"><button class="btn ghost" onclick="$('#bkDlg').close()">Not now</button><button class="btn" onclick="$('#bkDlg').close();saveBackup()">Save</button></div>`;d.showModal()}
+for(const fn of ['quickLog','dsSave','unlog']){const o=window[fn];window[fn]=(...a)=>{const r=o(...a);setTimeout(checkAllDone,50);return r}}
+
+// ---- v32 Tom's personal dosing defaults (override Reference/suggested)
+const USER_DEFAULTS={'ss-31':{slot:'AM',days:[0,1,2,3,4,5,6],phases:[{w:[1,8],mcg:2000}],note:'Your setting: 2 mg daily, flat (no titration).'},
+ 'retatrutide':{phases:[{w:[1,4],mcg:1000},{w:[5,8],mcg:2000},{w:[9,12],mcg:4000}],note:'Your setting: start 1 mg weekly for 4 weeks, then the site\'s 2 mg → 4 mg steps.'}};
+(SG().items||[]).forEach(it=>{const u=USER_DEFAULTS[it.name.toLowerCase()]||USER_DEFAULTS[(it.alias||'').toLowerCase()];if(!u)return;it.phases=u.phases;if(u.days)it.days=u.days;if(u.slot)it.slot=u.slot;it.user=u;it.site=u.note+' Site: '+it.site;it.why=(u.slot?'Your setting: '+u.slot+'. ':'')+it.why});
+function applyPlanUpdate(key){S.settings.imports=S.settings.imports||{};if(S.settings.imports[key]){tab='list';render();toast('Plan update already applied');return}
+ const out=[];['SS-31','Retatrutide'].forEach(n=>{const p=S.peptides.find(x=>x.name.toLowerCase()===n.toLowerCase()||(n==='Retatrutide'&&/glp-?3/i.test(x.name)));if(!p)return;
+  const act=S.protocols.filter(r=>r.peptideId===p.id&&r.active!==false),paused=S.protocols.filter(r=>r.peptideId===p.id&&r.active===false),pl=planFor(n,p.vialMg);
+  if(act[0]&&act[0].time){pl.time=act[0].time;pl.slot=slotOf(pl.time)}if(n==='SS-31'){pl.time=act[0]&&slotOf(act[0].time)==='AM'?act[0].time:'08:00';pl.slot='AM'}
+  if(act.length){savePlan(p,pl,pl.phases[0].mcg,'update');out.push(n)}
+  else if(paused.length){S.protocols=S.protocols.filter(r=>!(r.peptideId===p.id&&r.active===false));savePlan(p,pl,pl.phases[0].mcg,'update');S.protocols.forEach(r=>{if(r.peptideId===p.id)r.active=false});out.push(n+' (paused)')}});
+ S.settings.imports[key]=new Date().toISOString();save();tab='list';render();toast(out.length?'Updated: '+out.join(', '):'No SS-31/Retatrutide plans found')}
