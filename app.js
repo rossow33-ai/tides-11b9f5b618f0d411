@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='30';
+const APP_VERSION='31';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -401,7 +401,7 @@ window.flowMixed=()=>{const d=RQ.draft;let p=RQ.id?pep(RQ.id):null,isNew=!p;
 function dplan(){const p=pep(RQ.id);if(!p||!RQ.plan){tab='today';return today()}const u=units(p,RQ.dose);
  return`<h2>Dosing plan · ${esc(p.name)}</h2><div class="muted" style="margin-bottom:8px">${fmt(p.vialMg)} mg vial in ${fmt(p.bacMl,2)} mL (${fmt(p.vialMg/p.bacMl,3)} mg/mL). Educational reference only, not medical advice.</div>
  <div class="card"><label>Dose (mcg)</label><input type="number" min="0" step="any" value="${RQ.dose}" onchange="RQ.dose=+this.value||0;render()">
- <div style="margin:10px 0 2px;font-size:24px;font-weight:700;color:var(--ac)">${fmt(u,1)} units${u>100?' <span class="pill bad">2 draws</span>':''}</div><div class="muted">U-100 syringe</div></div>
+ <div style="margin:10px 0 2px;font-size:24px;font-weight:700;color:var(--ac)">${fmt(u,1)} units${u>100?' <span class="pill bad">2 draws</span>':''}</div>${syringeView(u)}<div class="muted">U-100 syringe</div></div>
  ${flowCard(p,u)}
  <div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="planSave()">Save plan</button><button class="btn ghost" onclick="tab=RQ.conf?'pconfirm':'pdetail';render();scrollTo(0,0)">Cancel</button></div>`}
 function savePlan(p,pl,dose,keep){let made=0;const ex=S.protocols.filter(r=>r.peptideId===p.id&&r.active!==false);
@@ -474,7 +474,7 @@ function dsDraw(){const r=S.protocols.find(x=>x.id===DS.rid),p=pep(r.peptideId),
  <div style="display:flex;flex-wrap:nowrap;gap:8px;align-items:center"><button class="btn ghost" onclick="dsSet(DS.mcg-${big?250:10})" aria-label="Less">−</button>
  <input id="dsAmt" type="number" step="any" min="0" value="${big?fmt(DS.mcg/1000,3):fmt(DS.mcg)}" style="text-align:center;font-size:20px;width:auto;flex:1;min-width:0" onchange="dsSet(this.value*${big?1000:1})"><span>${big?'mg':'mcg'}</span>
  <button class="btn ghost" onclick="dsSet(DS.mcg+${big?250:10})" aria-label="More">+</button></div>
- <div style="font-size:22px;font-weight:700;color:var(--ac);margin:8px 0">${fmt(u,1)} units</div>
+ <div style="font-size:22px;font-weight:700;color:var(--ac);margin:8px 0">${fmt(u,1)} units</div><div id="dsSyr" style="margin:2px 0 10px">${syringeView(u)}</div>
  ${DS.plan?`<div class="row" style="gap:8px">${[['½',.5],['Full',1],['1.5×',1.5]].map(([t,k])=>`<button class="btn sm ${DS.mcg===DS.plan*k?'':'ghost'}" onclick="dsSet(${DS.plan*k})">${t}</button>`).join('')}</div>`:''}
  <label style="margin-top:10px">Time</label><input id="dsTime" type="time" value="${DS.time}" onchange="DS.time=this.value">
  <div class="row" style="gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn ghost" onclick="$('#doseDlg').close()">Cancel</button><button class="btn" onclick="dsSave()">${DS.lid?'Save':'Log dose'}</button></div>`}
@@ -483,3 +483,19 @@ window.dsSave=()=>{const t=new Date(),[h,m]=(DS.time||'08:00').split(':');t.setH
  if(DS.lid){const l=S.logs.find(x=>x.id===DS.lid),delta=DS.mcg-l.doseMcg;if(delta>0)applyInventory(l.peptideId,delta,1);else if(delta<0){const p=pep(l.peptideId);p.remainingMg=+((+p.remainingMg||0)-delta/1000).toFixed(4)}
   l.doseMcg=DS.mcg;l.ts=+t;delete l.inv;save()}else logDose(DS.rid,DS.mcg,+t);
  $('#doseDlg').close();render();toast('Saved')};
+
+// ---- v31 realistic U-100 1 mL syringe
+function syr1(u){u=Math.max(0,Math.min(100,u));const X0=44,L=180,k=L/100,fx=X0+u*k,cy=30;let t='';
+ for(let i=2;i<=100;i+=2){const x=X0+i*k,maj=i%10===0;t+=`<line x1="${x.toFixed(1)}" y1="${cy-14}" x2="${x.toFixed(1)}" y2="${cy-14+(maj?9:i%10===5?6:4)}" stroke="#0b2f5e" stroke-width="${maj?1.1:.6}"/>`+(maj?`<text x="${x.toFixed(1)}" y="${cy+26}" font-size="10.5" fill="#cfe6ff" text-anchor="middle">${i}</text>`:'')}
+ const rodEnd=fx+118;
+ return`<svg viewBox="0 0 356 62" width="100%" style="display:block;max-width:100%" role="img" aria-label="Syringe filled to ${fmt(u,1)} units">
+ <defs><linearGradient id="brl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".5" stop-color="#eaf6ff" stop-opacity=".85"/><stop offset="1" stop-color="#bfe0ff" stop-opacity=".9"/></linearGradient>
+ <linearGradient id="fld" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fdcff"/><stop offset="1" stop-color="#4fb0ff"/></linearGradient></defs>
+ <line x1="2" y1="${cy}" x2="32" y2="${cy}" stroke="#dfe9f3" stroke-width="1.6" stroke-linecap="round"/><path d="M30 ${cy-4}h8l6 2v4l-6 2h-8z" fill="#FFB547"/>
+ <rect x="${X0}" y="${cy-14}" width="${L+9}" height="28" rx="3" fill="url(#brl)" stroke="#e6f2ff"/>
+ ${u>0?`<rect x="${X0+1}" y="${cy-12}" width="${Math.max(0,fx-X0-1).toFixed(1)}" height="24" fill="url(#fld)" opacity=".85"/>`:''}${t}
+ <rect x="${(fx).toFixed(1)}" y="${cy-13}" width="7" height="26" rx="1.5" fill="#1d2633"/><rect x="${(fx+7).toFixed(1)}" y="${cy-3}" width="${(rodEnd-fx-7).toFixed(1)}" height="6" fill="#f4f8fc" stroke="#cfe6ff" stroke-width=".6"/>
+ <rect x="${X0+L+9}" y="${cy-22}" width="6" height="44" rx="2" fill="#f4f8fc" stroke="#cfe6ff" stroke-width=".6"/>
+ <rect x="${rodEnd.toFixed(1)}" y="${cy-15}" width="6" height="30" rx="2" fill="#f4f8fc" stroke="#cfe6ff" stroke-width=".6"/></svg>`}
+function syringeView(u){if(!(u>0))return syr1(0);if(u<=100.0001)return syr1(u);const n=Math.ceil(u/100-1e-9);let h='',left=u;for(let i=0;i<n;i++){const v=Math.min(100,left);left-=v;h+=`<div class="muted" style="font-size:12px;margin-top:4px">Draw ${i+1}: ${fmt(v,1)}u</div>`+syr1(v)}
+ return`<div class="pill bad" style="display:inline-block;margin:4px 0">${n} draws</div>`+h}
