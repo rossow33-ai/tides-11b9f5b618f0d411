@@ -1,5 +1,5 @@
 // Tides service worker: network-first for app files (auto-updates), cache fallback offline.
-const VERSION='29',C='tides-v'+VERSION;
+const VERSION='30',C='tides-v'+VERSION;
 const CORE=['./','index.html','styles.css','app.js','reference.js','tide.js','schedule.js','ocr.js','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png','apple-touch-icon.png','kiter.svg','favicon.png'];
 const CDN='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>Promise.all([...CORE,CDN].map(u=>c.add(new Request(u,{cache:'reload'})).catch(()=>{})))))});

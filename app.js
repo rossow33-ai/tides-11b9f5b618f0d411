@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='29';
+const APP_VERSION='30';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -432,8 +432,8 @@ function lowLine(){const al=S.peptides.flatMap(p=>invStatus(p).out.map(o=>[o[0],
 today=function(){const d=new Date(),items=[];
  S.protocols.forEach(r=>{if(!isDue(r,d))return;const p=pep(r.peptideId);if(!p)return;const done=r.freq==='xweek'?weekLogs(r,d)>=r.timesPerWeek:logsOn(p.id,d).filter(l=>l.protocolId===r.id).length>0;items.push({r,p,done})});
  items.sort((a,b)=>(a.r.time||'').localeCompare(b.r.time||''));
- const row=({r,p,done})=>`<div class="trow2 ${done?'done':''}"><button class="chk ${done?'on':''}" ${done?'disabled':''} onclick="quickLog('${r.id}')" aria-label="Mark taken">${done?'✓':''}</button>
-  <div class="sp" onclick="openPep('${p.id}')"><b>${esc(p.name)}</b><div class="muted">${r.doseMcg?sgMcgTxt(r.doseMcg)+' · '+fmt(units(p,r.doseMcg),1)+'u':'set dose'}</div></div>${slotCtl(p.id,r)}</div>`;
+ const row=({r,p,done})=>{const lg=logsOn(p.id,d).find(l=>l.protocolId===r.id),diff=lg&&+lg.doseMcg!==+r.doseMcg;return`<div class="trow2 ${done?'done':''}"><button class="chk ${done?'on':''}" onclick="${lg?`unlog('${lg.id}')`:done?'':`quickLog('${r.id}')`}" aria-label="${done?'Undo taken':'Mark taken'}">${done?'✓':''}</button>
+  <div class="sp" onclick="doseSheet('${r.id}')"><b>${esc(p.name)}</b><div class="muted">${diff?`<b style="color:#FFD166">${sgMcgTxt(lg.doseMcg)} · ${fmt(units(p,lg.doseMcg),1)}u</b> <s>${sgMcgTxt(r.doseMcg)}</s>`:r.doseMcg?sgMcgTxt(r.doseMcg)+' · '+fmt(units(p,r.doseMcg),1)+'u':'set dose'}${lg?' · '+new Date(lg.ts).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</div></div>${slotCtl(p.id,r)}</div>`};
  const sec=(lab,its)=>`<div class="slothd">${lab==='AM'?'☀️ AM':'🌙 PM'}</div>${its.length?its.map(row).join(''):'<div class="muted" style="padding:6px 2px">Nothing</div>'}`;
  return`<h2>Today</h2><button class="btn big" onclick="startRecon()">🧪 Reconstitute vial</button>${lowLine()}
  ${items.length?sec('AM',items.filter(x=>slotOf(x.r.time)==='AM'))+sec('PM',items.filter(x=>slotOf(x.r.time)==='PM')):`<div class="muted" style="margin-top:16px;text-align:center">${S.peptides.length?'Nothing due today.':'No peptides yet. Tap Reconstitute vial to start.'}</div>`}`};
@@ -454,3 +454,32 @@ function pdetail(){const p=pep(DP);if(!p){tab='list';return list()}const e=expir
 window.pdPlan=id=>{const p=pep(id),pl=planFor(p.name,p.vialMg),r=curProto(id);if(r){pl.time=r.time||pl.time;pl.slot=slotOf(pl.time)}RQ={ids:[],i:0,id,flow:false,plan:pl,dose:r&&r.doseMcg?r.doseMcg:pl.phases[0].mcg,keep:'update',bac:p.bacMl};tab='dplan';render();scrollTo(0,0)};
 const ALIAS={inventory:'list',peptides:'list',protocols:'list'};
 const _r4=render;render=function(){if(ALIAS[tab])tab=ALIAS[tab];_r4();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab||(b.dataset.tab==='list'&&tab==='pdetail')))};
+
+// ---- v30 un-log + edit amount
+function invSnap(p){return{vials:+p.vials||0,remainingMg:+p.remainingMg||0,reconDate:p.reconDate||''}}
+function logDose(rid,mcg,ts){const r=S.protocols.find(x=>x.id===rid),p=pep(r.peptideId),inv=invSnap(p);applyInventory(p.id,+mcg,1);
+ const l={id:uid(),peptideId:p.id,protocolId:r.id,ts:ts||Date.now(),doseMcg:+mcg,site:suggestSite(),notes:'',side:'',inv};S.logs.push(l);save();return l}
+window.quickLog=rid=>{const r=S.protocols.find(x=>x.id===rid);if(!r)return;logDose(rid,r.doseMcg);render();toast('Logged')};
+function reverseLog(l){const p=pep(l.peptideId);if(!p)return;const later=S.logs.some(x=>x.peptideId===l.peptideId&&x.id!==l.id&&x.ts>l.ts);
+ if(l.inv&&!later){p.vials=l.inv.vials;p.remainingMg=l.inv.remainingMg;p.reconDate=l.inv.reconDate}
+ else{let mg=(+p.remainingMg||0)+l.doseMcg/1000;while(mg>+p.vialMg&&+p.vialMg>0){mg-=+p.vialMg;p.vials=(+p.vials||0)+1}p.remainingMg=+mg.toFixed(4)}}
+window.unlog=lid=>{const l=S.logs.find(x=>x.id===lid);if(!l)return;const snap=JSON.stringify(S);reverseLog(l);S.logs=S.logs.filter(x=>x.id!==lid);save();render();
+ undoBar('Dose un-logged',()=>{S=JSON.parse(snap);save();render()})};
+let DS=null;
+window.doseSheet=rid=>{const r=S.protocols.find(x=>x.id===rid),p=pep(r.peptideId),lg=logsOn(p.id,new Date()).find(l=>l.protocolId===rid),now=new Date();
+ DS={rid,lid:lg?lg.id:null,plan:+r.doseMcg||0,mcg:lg?+lg.doseMcg:+r.doseMcg||0,time:(lg?new Date(lg.ts):now).toTimeString().slice(0,5)};
+ let d=$('#doseDlg');if(!d){d=document.createElement('dialog');d.id='doseDlg';document.body.appendChild(d)}dsDraw();d.showModal()};
+function dsDraw(){const r=S.protocols.find(x=>x.id===DS.rid),p=pep(r.peptideId),d=$('#doseDlg'),u=units(p,DS.mcg),big=DS.plan>=1000;
+ d.innerHTML=`<h3 style="margin:0 0 4px">${esc(p.name)}</h3><div class="muted" style="margin-bottom:10px">Plan ${DS.plan?sgMcgTxt(DS.plan):'—'}</div>
+ <div style="display:flex;flex-wrap:nowrap;gap:8px;align-items:center"><button class="btn ghost" onclick="dsSet(DS.mcg-${big?250:10})" aria-label="Less">−</button>
+ <input id="dsAmt" type="number" step="any" min="0" value="${big?fmt(DS.mcg/1000,3):fmt(DS.mcg)}" style="text-align:center;font-size:20px;width:auto;flex:1;min-width:0" onchange="dsSet(this.value*${big?1000:1})"><span>${big?'mg':'mcg'}</span>
+ <button class="btn ghost" onclick="dsSet(DS.mcg+${big?250:10})" aria-label="More">+</button></div>
+ <div style="font-size:22px;font-weight:700;color:var(--ac);margin:8px 0">${fmt(u,1)} units</div>
+ ${DS.plan?`<div class="row" style="gap:8px">${[['½',.5],['Full',1],['1.5×',1.5]].map(([t,k])=>`<button class="btn sm ${DS.mcg===DS.plan*k?'':'ghost'}" onclick="dsSet(${DS.plan*k})">${t}</button>`).join('')}</div>`:''}
+ <label style="margin-top:10px">Time</label><input id="dsTime" type="time" value="${DS.time}" onchange="DS.time=this.value">
+ <div class="row" style="gap:10px;justify-content:flex-end;margin-top:14px"><button class="btn ghost" onclick="$('#doseDlg').close()">Cancel</button><button class="btn" onclick="dsSave()">${DS.lid?'Save':'Log dose'}</button></div>`}
+window.dsSet=v=>{DS.mcg=Math.max(0,+(+v).toFixed(3));DS.time=$('#dsTime')?$('#dsTime').value:DS.time;dsDraw()};
+window.dsSave=()=>{const t=new Date(),[h,m]=(DS.time||'08:00').split(':');t.setHours(+h,+m,0,0);
+ if(DS.lid){const l=S.logs.find(x=>x.id===DS.lid),delta=DS.mcg-l.doseMcg;if(delta>0)applyInventory(l.peptideId,delta,1);else if(delta<0){const p=pep(l.peptideId);p.remainingMg=+((+p.remainingMg||0)-delta/1000).toFixed(4)}
+  l.doseMcg=DS.mcg;l.ts=+t;delete l.inv;save()}else logDose(DS.rid,DS.mcg,+t);
+ $('#doseDlg').close();render();toast('Saved')};
