@@ -10,7 +10,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const ymd=d=>{d=new Date(d);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const parseD=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
 const dayDiff=(a,b)=>Math.round((parseD(ymd(b))-parseD(ymd(a)))/864e5);
-const fmt=(n,d=2)=>(+n).toFixed(d).replace(/\.?0+$/,'');
+const fmt=(n,d=2)=>d===0?String(Math.round(+n)):(+n).toFixed(d).replace(/\.0+$|(\.\d*?)0+$/,'$1');
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.peptides)return s}catch(e){}return{peptides:[],protocols:[],logs:[],settings:{}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(S))}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
@@ -43,7 +43,7 @@ function freqText(r){let t={daily:'Daily',xweek:`${r.timesPerWeek}×/week`,weekd
  if(+r.cycleOn&&+r.cycleOff)t+=` · ${r.cycleOn}w on / ${r.cycleOff}w off`;return t}
 function suggestSite(){const last={};SITES.forEach(s=>last[s]=0);S.logs.forEach(l=>{if(l.site in last)last[l.site]=Math.max(last[l.site],l.ts)});return SITES.slice().sort((a,b)=>last[a]-last[b])[0]}
 function applyInventory(pid,mcg,sign){const p=pep(pid);if(!p)return;let mg=(+p.remainingMg||0)-sign*mcg/1000;
- while(mg<0&&sign>0&&(+p.vials||0)>0){p.vials--;mg+=+p.vialMg;p.reconDate=ymd(new Date());toast('Opened new vial of '+p.name)}
+ while(mg<0&&sign>0&&(+p.vials||0)>0){p.vials--;mg+=+p.vialMg;p.reconDate=ymd(new Date());onMix(p,0);toast('Opened new vial of '+p.name)}
  if(sign<0&&mg>p.vialMg){/* restoring beyond one vial */}
  p.remainingMg=Math.max(0,+mg.toFixed(4))}
 
@@ -52,7 +52,7 @@ function render(){charts.forEach(c=>c.destroy());charts=[];
  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
  const W=tab==='wind',td=document.getElementById('tide');document.documentElement.classList.toggle('wind',W);if(td){const was=td.style.display==='block';td.style.display=W?'block':'none';if(W&&!was&&window.tideShow)tideShow()}if(W)return;
  $('#hdrDate').textContent=new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
- $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested,recon,rpick,dplan,pconfirm,list,pdetail})[tab]()+'<p class="disc">Personal log · not medical advice</p>';
+ $('#view').innerHTML=({today,peptides,reference,protocols,history:historyView,inventory,data,calc:calcView,settings,suggested,recon,rpick,dplan,pconfirm,list,pdetail,bacdetail})[tab]()+'<p class="disc">Personal log · not medical advice</p>';
  if(tab==='history')drawCharts()}
 function empty(msg,btn){return`<div class="card muted" style="text-align:center;padding:30px">${msg}<br><br>${btn||''}</div>`}
 
@@ -132,7 +132,7 @@ function inventory(){return`<h2>Inventory</h2><button class="btn" style="width:1
  <div class="stat"><b>${p.vials||0}</b><span class="muted">sealed vials</span></div><div class="stat"><b>${isFinite(st.daysLeft)?Math.floor(st.daysLeft)+'d':'—'}</b><span class="muted">est. supply</span></div>
  <div class="stat"><b>${e?e.toLocaleDateString(undefined,{month:'short',day:'numeric'}):'—'}</b><span class="muted">open vial expires</span></div></div>
  <div class="row" style="margin-top:10px"><button class="btn sm" onclick="openVial('${p.id}')">Open new vial</button> <button class="btn sm ghost" onclick="mixNow('${p.id}')">Mix / units</button><button class="btn sm danger" onclick="delPep('${p.id}')">Delete</button><button class="btn sm ghost" onclick="addVials('${p.id}')">+ Add sealed vials</button><button class="btn sm ghost" onclick="pepDlg('${p.id}')">Edit</button></div></details></div>`}).join(''):empty('No peptides yet.')}`}
-window.openVial=id=>{const p=pep(id);if(!(p.vials>0)&&!confirm('No sealed vials recorded. Open anyway?'))return;if(p.vials>0)p.vials--;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();render();toast('New vial reconstituted')};
+window.openVial=id=>{const p=pep(id);if(!(p.vials>0)&&!confirm('No sealed vials recorded. Open anyway?'))return;const rb=+p.remainingMg||0;if(p.vials>0)p.vials--;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());onMix(p,rb);save();render();toast('New vial reconstituted')};
 window.addVials=id=>{const n=parseInt(prompt('How many sealed vials to add?','1'));if(n>0){pep(id).vials=(+pep(id).vials||0)+n;save();render()}};
 
 function data(){return`<h2>Data</h2><div class="card"><h3>Backup</h3><p class="muted">Stored only on this device. Last backup: <b>${S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString():"never"}</b></p><p class="muted" style="font-size:12px">Saves as tides-backup.json. In Files, pick the same folder and tap Replace (iOS may add “ 2” otherwise).</p>
@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='35';
+const APP_VERSION='36';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -324,7 +324,7 @@ function recon(){const p=(RQ.flow?(RQ.id?{...pep(RQ.id),vialMg:RQ.draft.vialMg}:
  <div class="card"><b>Mixing checklist</b>${['Wash hands; swab both vial tops with alcohol and let dry','Draw '+fmt(bac,2)+' mL bacteriostatic water','Inject slowly down the inside wall of the peptide vial','Swirl gently until clear; do not shake','Label with today\'s date and refrigerate (2–8 °C)'].map((s,k)=>`<label style="display:flex;align-items:flex-start;gap:10px;margin:10px 0;font-size:15px;color:#fff"><input type="checkbox" style="width:20px;height:20px;margin:2px 0 0;flex:none"><span>${k+1}. ${esc(s)}</span></label>`).join('')}</div>
  ${RQ.flow?`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="flowMixed()">✓ Mixed</button><button class="btn ghost" onclick="startRecon()">‹ Back</button></div>`:`<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn" onclick="markMixed('${p.id}');autoPlan(pep('${p.id}'));tab='pconfirm';render();scrollTo(0,0)">✓ Mixed</button><button class="btn ghost" onclick="reconNext()">${last?'Not now':'Skip ›'}</button></div>`}
  <p class="muted" style="margin-top:10px">${p.reconDate?`Current vial mixed ${esc(p.reconDate)}, expires ${expiry(p).toLocaleDateString()}. `:''}Sealed vials on hand: ${+p.vials||0}.</p>`}
-window.markMixed=id=>{const p=pep(id);if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();render();toast('Vial mixed · expires '+expiry(p).toLocaleDateString())};
+window.markMixed=id=>{const p=pep(id),rb=+p.remainingMg||0;if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());onMix(p,rb);save();render();toast('Vial mixed · expires '+expiry(p).toLocaleDateString())};
 window.reconNext=()=>{const p=pep(RQ.id);if(p&&!p.reconDate){p.bacMl=RQ.bac;save()}if(RQ.i<RQ.ids.length-1){RQ.i++;RQ.id=RQ.ids[RQ.i];RQ.bac=+pep(RQ.id).bacMl||BAC();RQ.dose=null;tab='recon';render();scrollTo(0,0)}else{tab='list';render();scrollTo(0,0)}};
 window.mixNow=id=>mixFlow([id]);
 const _r3=render;
@@ -397,7 +397,7 @@ function flowCard(p,u){const pl=RQ.plan,ex=RQ.id?S.protocols.filter(r=>r.peptide
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return ymd(d)}
 window.flowMixed=()=>{const d=RQ.draft;let p=RQ.id?pep(RQ.id):null,isNew=!p;
  if(!p){p={id:uid(),name:d.name,vialMg:+d.vialMg,bacMl:RQ.bac,vials:0,remainingMg:0,reorderAt:1,expiryDays:EXP(),reconDate:'',notes:''};S.peptides.push(p)}
- if(RQ.newSize)p.vialMg=+RQ.newSize;if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());save();
+ const rb=+p.remainingMg||0;if(RQ.newSize)p.vialMg=+RQ.newSize;if(p.vials>0)p.vials--;p.bacMl=RQ.bac;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());onMix(p,rb);save();
  RQ.isNew=isNew;autoPlan(p);tab='pconfirm';render();scrollTo(0,0)};
 function dplan(){const p=pep(RQ.id);if(!p||!RQ.plan){tab='today';return today()}const u=units(p,RQ.dose);
  return`<h2>Dosing plan · ${esc(p.name)}</h2><div class="muted" style="margin-bottom:8px">${fmt(p.vialMg)} mg vial in ${fmt(p.bacMl,2)} mL (${fmt(p.vialMg/p.bacMl,3)} mg/mL). Educational reference only, not medical advice.</div>
@@ -454,15 +454,15 @@ function pdetail(){const p=pep(DP);if(!p){tab='list';return list()}const e=expir
  <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" onclick="mixNow('${p.id}')">🧪 Mix vial</button><button class="btn ghost" onclick="addVials('${p.id}')">+ Vials</button><button class="btn ghost" onclick="pepDlg('${p.id}')">Edit</button><button class="btn danger" onclick="delPep('${p.id}')">Delete</button></div>`}
 window.pdPlan=id=>{const p=pep(id),pl=planFor(p.name,p.vialMg),r=curProto(id);if(r){pl.time=r.time||pl.time;pl.slot=slotOf(pl.time)}RQ={ids:[],i:0,id,flow:false,plan:pl,dose:r&&r.doseMcg?r.doseMcg:pl.phases[0].mcg,keep:'update',bac:p.bacMl};tab='dplan';render();scrollTo(0,0)};
 const ALIAS={inventory:'list',peptides:'list',protocols:'list'};
-const _r4=render;render=function(){if(ALIAS[tab])tab=ALIAS[tab];_r4();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab||(b.dataset.tab==='list'&&tab==='pdetail')))};
+const _r4=render;render=function(){if(ALIAS[tab])tab=ALIAS[tab];_r4();document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab||(b.dataset.tab==='list'&&(tab==='pdetail'||tab==='bacdetail'))))};
 
 // ---- v30 un-log + edit amount
-function invSnap(p){return{vials:+p.vials||0,remainingMg:+p.remainingMg||0,reconDate:p.reconDate||''}}
+function invSnap(p){return{vials:+p.vials||0,remainingMg:+p.remainingMg||0,reconDate:p.reconDate||'',cur:p.curVial||null,vh:JSON.stringify(p.vialsHist||[]),bac:JSON.stringify(BACS())}}
 function logDose(rid,mcg,ts){const r=S.protocols.find(x=>x.id===rid),p=pep(r.peptideId),inv=invSnap(p);applyInventory(p.id,+mcg,1);
- const l={id:uid(),peptideId:p.id,protocolId:r.id,ts:ts||Date.now(),doseMcg:+mcg,site:suggestSite(),notes:'',side:'',inv};S.logs.push(l);save();return l}
+ const l={id:uid(),peptideId:p.id,protocolId:r.id,ts:ts||Date.now(),doseMcg:+mcg,site:suggestSite(),notes:'',side:'',inv,vialId:p.curVial||null};S.logs.push(l);save();return l}
 window.quickLog=rid=>{const r=S.protocols.find(x=>x.id===rid);if(!r)return;logDose(rid,r.doseMcg);render();toast('Logged')};
 function reverseLog(l){const p=pep(l.peptideId);if(!p)return;const later=S.logs.some(x=>x.peptideId===l.peptideId&&x.id!==l.id&&x.ts>l.ts);
- if(l.inv&&!later){p.vials=l.inv.vials;p.remainingMg=l.inv.remainingMg;p.reconDate=l.inv.reconDate}
+ if(l.inv&&!later){p.vials=l.inv.vials;p.remainingMg=l.inv.remainingMg;p.reconDate=l.inv.reconDate;if(l.inv.vh){p.vialsHist=JSON.parse(l.inv.vh);p.curVial=l.inv.cur;S.settings.bac=JSON.parse(l.inv.bac)}}
  else{let mg=(+p.remainingMg||0)+l.doseMcg/1000;while(mg>+p.vialMg&&+p.vialMg>0){mg-=+p.vialMg;p.vials=(+p.vials||0)+1}p.remainingMg=+mg.toFixed(4)}}
 window.unlog=lid=>{const l=S.logs.find(x=>x.id===lid);if(!l)return;const snap=JSON.stringify(S);reverseLog(l);S.logs=S.logs.filter(x=>x.id!==lid);save();render();
  undoBar('Dose un-logged',()=>{S=JSON.parse(snap);save();render()})};
@@ -632,3 +632,50 @@ window.pdTaper=id=>{pdPlan(id);planInit();RQ.taperCfg={mode:'ladder',wks:2,pct:5
  return h.replace(/<b>([^<]*)<\/b><div class="muted">/g,(m,nm)=>{const p=S.peptides.find(x=>esc(x.name)===nm);return p&&tp.has(p.id)?`<b>${nm}</b> <span class="pill warn" style="font-size:10px">Tapering</span><div class="muted">`:m})}})();
 (function(){const _p=pdetail;pdetail=function(){const h=_p(),p=pep(DP);if(!p)return h;const tp=S.protocols.some(r=>r.peptideId===p.id&&r.taper&&r.active!==false);
  return h.replace('<button class="btn danger" onclick="delPep',`${S.protocols.some(r=>r.peptideId===p.id&&r.active!==false)&&!tp?`<button class="btn ghost" onclick="pdTaper('${p.id}')">↘ Taper off</button>`:''}${tp?'<span class="pill warn">Tapering</span>':''}<button class="btn danger" onclick="delPep`)}})();
+
+// ---- v36 per-vial history + BAC water bottle
+function BACS(){S.settings.bac=S.settings.bac||{bottleMl:30,remaining:30,sealed:+((S.settings.supplies||{}).bacWater)||0};return S.settings.bac}
+function onMix(p,discard){const t=ymd(new Date());p.vialsHist=p.vialsHist||[];const c=p.vialsHist.find(v=>v.id===p.curVial);if(c&&!c.finished){c.finished=t;c.discarded=+(+discard||0).toFixed(4)}
+ const v={id:uid(),mixed:t,finished:'',bac:+p.bacMl||0,mg:+p.vialMg||0,discarded:0};p.vialsHist.push(v);p.curVial=v.id;const b=BACS();b.remaining=Math.max(0,+(b.remaining-(+p.bacMl||0)).toFixed(2))}
+// migration: current open vial -> record; logs since mix date linked to it; older stay 'Earlier'
+(function(){let ch=0;S.peptides.forEach(p=>{if(p.reconDate&&!p.curVial){const v={id:uid(),mixed:p.reconDate,finished:'',bac:+p.bacMl||0,mg:+p.vialMg||0,discarded:0,migrated:true};p.vialsHist=(p.vialsHist||[]).concat(v);p.curVial=v.id;
+ const t0=+parseD(p.reconDate);S.logs.forEach(l=>{if(l.peptideId===p.id&&!l.vialId&&l.ts>=t0)l.vialId=v.id});ch++}});if(!S.settings.bac){BACS();ch++}if(ch)save()})();
+function vialInfo(p){const rem=+p.remainingMg||0,vm=+p.vialMg||0,u=vm?rem/vm*(+p.bacMl||0)*100:0,r=curProto(p.id),d=r&&r.doseMcg?Math.floor(rem*1000/r.doseMcg+1e-6):null,pct=vm?Math.max(0,Math.min(100,rem/vm*100)):0;return{rem,u,d,pct}}
+function fillBar(pct){return`<div style="height:5px;background:rgba(255,255,255,.15);border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct.toFixed(0)}%;background:${pct<20?'#FFD166':'#8FD3FF'}"></div></div>`}
+list=function(){const b=BACS();return`<h2>Peptides <button class="btn sm ghost" onclick="pepDlg()">+ Add</button></h2>
+ ${S.peptides.length?S.peptides.map(p=>{const r=curProto(p.id),st=invStatus(p),vi=vialInfo(p);return`<div class="card swipe pcard" data-pid="${p.id}" onclick="openPep('${p.id}')">
+  <div class="row"><b class="sp" style="font-size:17px">${esc(p.name)}</b>${r?slotCtl(p.id,r):''}</div>
+  <div class="muted">${r&&r.doseMcg?sgMcgTxt(r.doseMcg)+' · ':''}${+p.vials||0} sealed${st.out.some(o=>o[0]==='bad')?' · <span style="color:var(--bad)">⚠</span>':''}</div>
+  ${p.reconDate?`<div style="font-size:14px;margin-top:4px">Open: <b>${fmt(vi.rem,2)} mg</b> · ${fmt(vi.u,0)}u${vi.d!=null?` · ~${vi.d} dose${vi.d===1?'':'s'} left`:''}</div>${fillBar(vi.pct)}`:''}</div>`}).join(''):`<div class="muted" style="text-align:center;margin-top:20px">No peptides yet.</div>`}
+ <div class="card pcard" onclick="tab='bacdetail';render();scrollTo(0,0)"><div class="row"><b class="sp" style="font-size:17px">💧 BAC water</b></div>
+ <div class="muted">${b.sealed} sealed bottle${b.sealed===1?'':'s'} · ${fmt(b.bottleMl,0)} mL each</div>
+ <div style="font-size:14px;margin-top:4px">Open: <b>${fmt(b.remaining,1)} mL</b> · ~${Math.floor(b.remaining/(+BAC()||2))} mixes left</div>${fillBar(b.bottleMl?b.remaining/b.bottleMl*100:0)}
+ ${b.remaining<4?`<div style="color:#FFD166;font-size:13px;margin-top:6px">⚠ Low: under 4 mL${b.sealed?'':' and no sealed bottles'}</div>`:''}</div>`};
+function bacdetail(){const b=BACS(),use=S.peptides.flatMap(p=>(p.vialsHist||[]).filter(v=>!v.migrated).map(v=>({d:v.mixed,n:p.name,ml:+v.bac||0}))).sort((a,c)=>c.d.localeCompare(a.d)),tot=use.reduce((a,x)=>a+x.ml,0),bt=b.bottles||[];
+ return`<h2 style="justify-content:flex-start;gap:10px"><button class="btn sm ghost" onclick="tab='list';render()" aria-label="Back">‹</button>💧 BAC water</h2>
+ <div class="card"><div class="grid"><div class="stat"><b>${fmt(b.remaining,1)} mL</b><span class="muted">open bottle</span></div><div class="stat"><b>${b.sealed}</b><span class="muted">sealed</span></div><div class="stat"><b>${fmt(b.bottleMl,0)} mL</b><span class="muted">bottle size</span></div></div>${fillBar(b.bottleMl?b.remaining/b.bottleMl*100:0)}
+ ${b.remaining<4?`<div style="color:#FFD166;font-size:13px;margin-top:6px">⚠ Low: under 4 mL</div>`:''}
+ <button class="btn" style="width:100%;margin-top:10px" onclick="newBottle()">New bottle</button>
+ <details class="info"><summary>ⓘ edit</summary><div class="row" style="gap:8px;margin-top:6px"><label class="muted">Left</label><input type="number" step="0.1" min="0" value="${b.remaining}" style="width:80px" onchange="BACS().remaining=+this.value||0;save();render()"><label class="muted">Bottle</label><input type="number" step="1" min="1" value="${b.bottleMl}" style="width:70px" onchange="BACS().bottleMl=+this.value||30;save();render()"><label class="muted">Sealed</label><input type="number" min="0" value="${b.sealed}" style="width:60px" onchange="BACS().sealed=+this.value||0;save();render()"></div></details></div>
+ <div class="card"><b>Usage</b><table class="ref" style="width:100%;font-size:13px;margin-top:6px"><tr><th>Date</th><th>Mixed into</th><th style="text-align:right">mL</th></tr>${use.map(x=>`<tr><td>${dFmt(parseD(x.d))}</td><td>${esc(x.n)}</td><td style="text-align:right">${fmt(x.ml,1)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">No mixes recorded yet</td></tr>'}
+ <tr style="font-weight:700"><td>TOTAL</td><td>${use.length} mix${use.length===1?'':'es'} · ${bt.length} bottle${bt.length===1?'':'s'} opened</td><td style="text-align:right">${fmt(tot,1)}</td></tr></table></div>`}
+
+window.newBottle=()=>{const b=BACS();if(!confirm(`Open a new ${fmt(b.bottleMl,0)} mL bottle?${b.sealed?'':' (no sealed bottles recorded)'}`))return;if(b.sealed>0)b.sealed--;b.remaining=b.bottleMl;(b.bottles=b.bottles||[]).push({opened:ymd(new Date()),ml:b.bottleMl});save();render();toast('New BAC bottle opened')};
+window.newVial=id=>{const p=pep(id),rem=+p.remainingMg||0;if(!confirm(`Start a new ${fmt(p.vialMg)} mg vial of ${p.name}?\n${rem>0?`The current vial's ${fmt(rem,2)} mg will be recorded as discarded.\n`:''}${p.vials>0?'Uses 1 sealed vial.':'No sealed vials recorded; a full vial is assumed.'}`))return;
+ if(p.vials>0)p.vials--;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());onMix(p,rem);save();
+ if(confirm('Vial opened. Go to the mixing screen?')){RQ={ids:[id],i:0,id,bac:+p.bacMl||BAC(),dose:null,noMark:true};tab='recon';render();scrollTo(0,0)}else{render();toast('New vial · expires '+expiry(p).toLocaleDateString())}};
+// recon in "already opened" mode: Mixed only applies a BAC change
+(function(){const _r=recon;recon=function(){const h=_r();if(!RQ.noMark)return h;return h.replace(/<button class="btn" onclick="markMixed\('([^']+)'\);autoPlan\(pep\('[^']+'\)\);tab='pconfirm';render\(\);scrollTo\(0,0\)">✓ Mixed<\/button>/,`<button class="btn" onclick="mixedNoMark('$1')">✓ Mixed</button>`)}})();
+window.mixedNoMark=id=>{const p=pep(id),v=(p.vialsHist||[]).find(x=>x.id===p.curVial),nb=RQ.bac;if(v&&nb!==v.bac){const b=BACS();b.remaining=Math.max(0,+(b.remaining-(nb-v.bac)).toFixed(2));v.bac=nb;p.bacMl=nb}save();RQ.noMark=false;DP=id;tab='pdetail';render();scrollTo(0,0);toast('Vial mixed')};
+function vialTable(p){const vh=(p.vialsHist||[]).slice().sort((a,b)=>a.mixed.localeCompare(b.mixed)),L=S.logs.filter(l=>l.peptideId===p.id);
+ const row=(a,b,c,d,e,f,g,cls='')=>`<tr class="${cls}"><td>${a}</td><td>${b}</td><td style="text-align:right">${c}</td><td style="text-align:right">${d}</td><td style="text-align:right">${e}</td><td style="text-align:right">${f}</td></tr>`;
+ const sd=s=>s?dFmt(parseD(s)):'';let T={n:0,mg:0,dis:0,bac:0};const rows=[];
+ const early=L.filter(l=>!l.vialId||!vh.some(v=>v.id===l.vialId));if(early.length){const mg=early.reduce((a,l)=>a+l.doseMcg/1000,0);T.n+=early.length;T.mg+=mg;rows.push(row('Earlier','—',early.length,fmt(mg,2),'—','—'))}
+ vh.forEach(v=>{const ls=L.filter(l=>l.vialId===v.id),mg=ls.reduce((a,l)=>a+l.doseMcg/1000,0);T.n+=ls.length;T.mg+=mg;T.dis+=+v.discarded||0;T.bac+=+v.bac||0;rows.push(row(sd(v.mixed),v.finished?sd(v.finished):(v.id===p.curVial?'<b>open</b>':''),ls.length,fmt(mg,2),fmt(+v.discarded||0,2),fmt(+v.bac||0,1)))});
+ if(!rows.length)return'';
+ return`<div class="card"><b>Vials</b><div style="overflow-x:auto"><table class="ref" style="width:100%;font-size:13px;margin-top:6px"><tr><th>Mixed</th><th>Finished</th><th>Doses</th><th>mg taken</th><th>mg disc.</th><th>BAC mL</th></tr>${rows.join('')}
+ <tr style="font-weight:700;border-top:1px solid var(--line)"><td>TOTAL</td><td>${vh.length} vial${vh.length===1?'':'s'}</td><td style="text-align:right">${T.n}</td><td style="text-align:right">${fmt(T.mg,2)}</td><td style="text-align:right">${fmt(T.dis,2)}</td><td style="text-align:right">${fmt(T.bac,1)}</td></tr></table></div></div>`}
+(function(){const _p=pdetail;pdetail=function(){let h=_p(),p=pep(DP);if(!p)return h;const vi=vialInfo(p);
+ h=h.replace('<div class="muted" style="margin-top:6px">'+fmt(p.vialMg)+' mg vial',`${p.reconDate?`<div style="margin-top:8px">Open vial: <b>${fmt(vi.rem,2)} mg</b> · ${fmt(vi.u,0)}u${vi.d!=null?` · ~${vi.d} doses`:''}</div>${fillBar(vi.pct)}`:''}<button class="btn" style="width:100%;margin-top:10px" onclick="newVial('${p.id}')">🧪 New vial</button><div class="muted" style="margin-top:6px">${fmt(p.vialMg)} mg vial`);
+ h=h.replace(`<button class="btn" onclick="mixNow('${p.id}')">🧪 Mix vial</button>`,'');
+ return h.replace('<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" onclick="addVials',vialTable(p)+'<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" onclick="addVials')}})();
