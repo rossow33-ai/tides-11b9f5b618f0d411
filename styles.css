@@ -151,3 +151,5 @@ a{color:#c8ebff}
 input.tm{width:auto;padding:4px 6px;font-size:13px;margin-left:4px;background:rgba(3,25,55,.45)}
 .pcard{cursor:pointer}.pcard .row{gap:6px;align-items:center}
 details.info{display:inline-block;margin-top:6px}details.info summary{list-style:none;cursor:pointer;color:#cfe6ff;font-size:15px}details.info summary::-webkit-details-marker{display:none}details.info[open]{display:block}
+
+.addx{width:52px;height:52px;border-radius:50%;border:1.5px solid rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;font-size:30px;line-height:1;font-weight:300;cursor:pointer;padding:0}.addx:active{background:rgba(255,255,255,.28)}
