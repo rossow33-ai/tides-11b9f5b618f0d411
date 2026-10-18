@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='37';
+const APP_VERSION='38';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -686,16 +686,16 @@ function vialTable(p){const vh=(p.vialsHist||[]).slice().sort((a,b)=>a.mixed.loc
 let XS=null;
 function xPeps(){const o=S.peptides.filter(p=>p.reconDate||+p.remainingMg>0);return o.length?o:S.peptides}
 function xDefault(pid){const r=curProto(pid);if(r&&+r.doseMcg)return+r.doseMcg;const l=S.logs.filter(x=>x.peptideId===pid).sort((a,b)=>b.ts-a.ts)[0];return l?+l.doseMcg:0}
-window.xSheet=(pid,lid)=>{const now=new Date();if(lid){const l=S.logs.find(x=>x.id===lid);if(!l)return;XS={lid,pid:l.peptideId,mcg:+l.doseMcg,slot:l.slot||slotOf(new Date(l.ts).toTimeString().slice(0,5))}}
+window.xSheet=(pid,lid)=>{const now=new Date();if(lid){const l=S.logs.find(x=>x.id===lid);if(!l)return;XS={lid,extra:!!l.extra,pid:l.peptideId,mcg:+l.doseMcg,slot:l.slot||slotOf(new Date(l.ts).toTimeString().slice(0,5))}}
  else{const ps=xPeps();pid=pid||ps[0].id;XS={lid:null,pid,mcg:xDefault(pid),slot:slotOf(now.toTimeString().slice(0,5))}}
  let d=$('#xDlg');if(!d){d=document.createElement('dialog');d.id='xDlg';document.body.appendChild(d)}xDraw();if(!d.open)d.showModal()};
 function xDraw(){const p=pep(XS.pid),d=$('#xDlg'),big=XS.big!=null?XS.big:XS.mcg>=1000||(!XS.mcg&&+p.vialMg>=20),u=XS.mcg?units(p,XS.mcg):0;XS.big=big;
- d.innerHTML=`<h3 style="margin:0 0 10px">${XS.lid?'Edit extra dose':'Add dose'}</h3>
+ d.innerHTML=`<h3 style="margin:0 0 10px">${XS.lid?(XS.extra?'Edit extra dose':'Edit dose'):'Add dose'}</h3>
  ${XS.lid?`<div style="font-weight:700;margin-bottom:8px">${esc(p.name)}</div>`:`<select id="xPep" onchange="XS.pid=this.value;XS.mcg=xDefault(this.value);XS.big=null;xDraw()">${xPeps().map(q=>`<option value="${q.id}" ${q.id===XS.pid?'selected':''}>${esc(q.name)}</option>`).join('')}</select>`}
  <div style="display:flex;flex-wrap:nowrap;gap:8px;align-items:center;margin-top:10px"><input id="xAmt" type="number" step="any" min="0" placeholder="amount" value="${XS.mcg?(big?fmt(XS.mcg/1000,3):fmt(XS.mcg)):''}" style="text-align:center;font-size:20px;width:auto;flex:1;min-width:0" oninput="XS.mcg=Math.max(0,+this.value*(XS.big?1000:1)||0);xUpd()">
  <button class="btn sm ghost" onclick="XS.big=!XS.big;xDraw()" aria-label="Switch unit">${big?'mg':'mcg'}</button></div>
  <div id="xU" style="font-size:22px;font-weight:700;color:var(--ac);margin:8px 0">${fmt(u,1)} units</div><div id="xSyr" style="margin:2px 0 10px">${syringeView(u)}</div>
- <div class="row" style="gap:8px">${['AM','PM'].map(t=>`<button class="pill slot ${t} ${XS.slot===t?'':'off'}" style="${XS.slot===t?'':'opacity:.45'}" onclick="XS.slot='${t}';xDraw()">${t}</button>`).join('')}<span class="muted" style="font-size:12px">extra · doesn't change your plan</span></div>
+ <div class="row" style="gap:8px">${['AM','PM'].map(t=>`<button class="pill slot ${t} ${XS.slot===t?'':'off'}" style="${XS.slot===t?'':'opacity:.45'}" onclick="XS.slot='${t}';xDraw()">${t}</button>`).join('')}${!XS.lid||XS.extra?'<span class="muted" style="font-size:12px">extra · doesn\'t change your plan</span>':''}</div>
  <div class="row" style="gap:10px;justify-content:flex-end;margin-top:14px">${XS.lid?`<button class="btn danger sm" onclick="$('#xDlg').close();unlog('${XS.lid}')">Remove</button><span class="sp"></span>`:''}<button class="btn ghost" onclick="$('#xDlg').close()">Cancel</button><button class="btn" onclick="xSave()">${XS.lid?'Save':'Log dose'}</button></div>`;
  setTimeout(()=>{const i=$('#xAmt');if(i&&!XS.mcg&&!XS.lid)i.focus()},50)}
 window.xUpd=()=>{const p=pep(XS.pid),u=XS.mcg?units(p,XS.mcg):0;$('#xU').textContent=fmt(u,1)+' units';$('#xSyr').innerHTML=syringeView(u)};
@@ -709,3 +709,19 @@ window.xSave=()=>{if(!(XS.mcg>0)){toast('Enter an amount');return}
 function reAmt(l,mcg){const p=pep(l.peptideId);if(!p){l.doseMcg=mcg;return}const later=S.logs.some(x=>x.peptideId===l.peptideId&&x.id!==l.id&&x.ts>l.ts);
  if(l.inv&&l.inv.vh&&!later){reverseLog(l);applyInventory(p.id,mcg,1);l.vialId=p.curVial||l.vialId;l.doseMcg=mcg;return}
  const delta=mcg-l.doseMcg;if(delta>0)applyInventory(p.id,delta,1);else if(delta<0)p.remainingMg=+((+p.remainingMg||0)-delta/1000).toFixed(4);l.doseMcg=mcg;delete l.inv}
+
+// ---- v38 per-peptide History on detail page
+const PH={};window.phMore=id=>{PH[id]=(PH[id]||20)+20;render()};
+function pepHist(p){const L=S.logs.filter(l=>l.peptideId===p.id).sort((a,b)=>b.ts-a.ts);if(!L.length)return`<div class="card"><b>History</b><div class="muted" style="margin-top:4px">No doses logged yet.</div></div>`;
+ const vh=(p.vialsHist||[]).slice().sort((a,b)=>a.mixed.localeCompare(b.mixed)),vn=id=>{const i=vh.findIndex(v=>v.id===id);return i<0?null:i},
+  tot=L.reduce((a,l)=>a+l.doseMcg/1000,0),n=PH[p.id]||20,show=L.slice(0,n),grp=L.length>10;let last='',rows='';
+ show.forEach(l=>{const d=new Date(l.ts),mk=d.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  if(grp&&mk!==last){rows+=`<div class="muted" style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin:10px 0 2px">${mk}</div>`;last=mk}
+  const i=vn(l.vialId),v=i==null?null:vh[i],u=v&&v.mg&&v.bac?l.doseMcg/1000/(v.mg/v.bac)*100:units(p,l.doseMcg),sl=l.slot||slotOf(d.toTimeString().slice(0,5));
+  rows+=`<div class="row hrow" onclick="xSheet(null,'${l.id}')" style="padding:8px 0;border-top:1px solid var(--line);cursor:pointer;gap:10px">
+  <div style="width:54px;flex:none;line-height:1.15"><b>${d.toLocaleDateString(undefined,{weekday:'short'})}</b><div class="muted" style="font-size:12px">${d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>
+  <div class="sp"><b>${sgMcgTxt(l.doseMcg)}</b> <span class="muted">· ${fmt(u,1)}u</span>${l.extra?' <span class="pill">extra</span>':''}<div class="muted" style="font-size:12px">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})} · ${i==null?'Earlier':'Vial '+(i+1)}</div></div><span class="muted">›</span></div>`});
+ const ld=new Date(L[0].ts);
+ return`<div class="card"><div class="row"><b class="sp">History</b></div><div class="muted" style="font-size:13px;margin:2px 0 4px">${fmt(tot,2)} mg total · ${L.length} dose${L.length===1?'':'s'} · last ${ld.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</div>
+ ${rows}${L.length>n?`<button class="btn ghost sm" style="width:100%;margin-top:8px" onclick="phMore('${p.id}')">Show more (${L.length-n})</button>`:''}</div>`}
+(function(){const _p=pdetail;pdetail=function(){const h=_p(),p=pep(DP);if(!p)return h;const vt=vialTable(p);return h.includes(vt)?h.replace(vt,pepHist(p)+vt):h}})();
