@@ -135,7 +135,7 @@ function inventory(){return`<h2>Inventory</h2><button class="btn" style="width:1
 window.openVial=id=>{const p=pep(id);if(!(p.vials>0)&&!confirm('No sealed vials recorded. Open anyway?'))return;const rb=+p.remainingMg||0;if(p.vials>0)p.vials--;p.remainingMg=+p.vialMg;p.reconDate=ymd(new Date());onMix(p,rb);save();render();toast('New vial reconstituted')};
 window.addVials=id=>{const n=parseInt(prompt('How many sealed vials to add?','1'));if(n>0){pep(id).vials=(+pep(id).vials||0)+n;save();render()}};
 
-function data(){return`<h2>Data</h2><div class="card"><h3>Backup</h3><p class="muted">Stored only on this device. Last backup: <b>${S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString():"never"}</b></p><p class="muted" style="font-size:12px">Saves an encrypted file named <b>tides</b>. In Files, pick the same folder and tap Replace (iOS may add “ 2” otherwise). ${S.settings.bkPw?'🔒 Password set':'<a onclick="pwDlg()" style="cursor:pointer;text-decoration:underline">Set a backup password</a> first.'}</p>
+function data(){return`<h2>Data</h2><div class="card"><h3>Backup</h3><p class="muted">Stored only on this device. Last backup: <b>${S.settings.lastBackup?new Date(S.settings.lastBackup).toLocaleString():"never"}</b></p><p class="muted" style="font-size:12px">Saves an encrypted file named <b>tides</b>. In Files, pick the same folder and tap Replace (iOS may add “ 2” otherwise).</p>
  <div class="row"><button class="btn" onclick="exportJSON()">Export backup</button><button class="btn ghost" onclick="exportCSV()">Export logs CSV</button>
  <label class="btn ghost" style="margin:0;color:var(--tx)">Import backup<input type="file" hidden onchange="importJSON(this)"></label></div></div>
   <div class="card"><h3>Stats</h3><div class="muted">${S.peptides.length} peptides · ${S.protocols.length} protocols · ${S.logs.length} logs</div></div>
@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='39';
+const APP_VERSION='40';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -257,7 +257,6 @@ function settings(){return`<h2>Settings</h2><div class="card"><label>Default BAC
  <input type="number" step="any" min="0.1" value="${BAC()}" onchange="S.settings.defaultBac=+this.value||2;save();toast('Default BAC water: '+S.settings.defaultBac+' mL')">
  <label>Default vial expiry after reconstitution (days)</label><input type="number" min="1" value="${EXP()}" onchange="S.settings.defaultExpiry=+this.value||28;save();toast('Default expiry: '+S.settings.defaultExpiry+' days')">
  <p class="muted">Defaults apply to newly added peptides. Edit an existing peptide to change its own values.</p></div>
- <div class="card"><div class="row"><div class="sp"><b>Backup password</b><div class="muted" style="font-size:13px">${S.settings.bkPw?'🔒 Set · backups are encrypted':'Not set · needed to save backups'}</div></div><button class="btn sm ${S.settings.bkPw?'ghost':''}" onclick="pwDlg()">${S.settings.bkPw?'Change':'Set'}</button></div></div>
  <p class="muted" id="ver" style="text-align:center">Tides v${APP_VERSION}</p>`}
 window.menu=o=>{$('#drawer').classList.toggle('on',o);$('#scrim').classList.toggle('on',o);$('#drawer').setAttribute('aria-hidden',!o)};
 document.querySelectorAll('#drawer [data-go]').forEach(b=>b.onclick=()=>{tab=b.dataset.go;menu(false);render();scrollTo(0,0)});
@@ -723,51 +722,26 @@ function pepHist(p){const L=S.logs.filter(l=>l.peptideId===p.id).sort((a,b)=>b.t
  ${rows}${L.length>n?`<button class="btn ghost sm" style="width:100%;margin-top:8px" onclick="phMore('${p.id}')">Show more (${L.length-n})</button>`:''}</div>`}
 (function(){const _p=pdetail;pdetail=function(){const h=_p(),p=pep(DP);if(!p)return h;const vt=vialTable(p);return h.includes(vt)?h.replace(vt,pepHist(p)+vt):h}})();
 
-// ---- v39 encrypted backup file "tides" (PBKDF2-SHA256 600k -> AES-GCM-256), key kept on device in IndexedDB
-const BK_NAME='tides',BK_ITER=600000,enc=new TextEncoder(),dec=new TextDecoder();
+// ---- v40 encrypted backup file "tides": AES-GCM-256 with a fixed app key (versioned), random 12-byte IV per file. No password.
+const BK_NAME='tides',enc=new TextEncoder(),dec=new TextDecoder();
 const b64=u=>{let s='';const a=new Uint8Array(u);for(let i=0;i<a.length;i+=32768)s+=String.fromCharCode.apply(null,a.subarray(i,i+32768));return btoa(s)},unb64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
-async function deriveKey(pw,salt,usage){const base=await crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveKey']);
- return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations:BK_ITER},base,{name:'AES-GCM',length:256},false,usage)}
-function kv(){return new Promise((ok,no)=>{const r=indexedDB.open('tides-kv',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
-async function kvGet(k){const db=await kv();return new Promise((ok,no)=>{const q=db.transaction('k').objectStore('k').get(k);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)})}
-async function kvSet(k,v){const db=await kv();return new Promise((ok,no)=>{const t=db.transaction('k','readwrite');t.objectStore('k').put(v,k);t.oncomplete=()=>ok();t.onerror=()=>no(t.error)})}
-let BKMEM=null;async function bkKey(){if(BKMEM)return BKMEM;try{BKMEM=await kvGet('backup')}catch(e){}return BKMEM||null}
-async function encryptBackup(txt){const k=await bkKey();if(!k)return null;const iv=crypto.getRandomValues(new Uint8Array(12));
- const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},k.key,enc.encode(txt));return JSON.stringify({tides:1,v:1,kdf:'PBKDF2-SHA256',iter:BK_ITER,salt:b64(k.salt),iv:b64(iv),ct:b64(ct)})}
-async function decryptBackup(o,pw){const key=await deriveKey(pw,unb64(o.salt),['decrypt']);
- return dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct)))}
+const BK_KEYS={2:'tides/backup/k2·7f3c9a51e8d24b06·reef-swell-offshore'};const BK_CUR=2,BKK={};
+async function appKey(v){if(!BK_KEYS[v])throw new Error('unknown key version');if(!BKK[v]){const h=await crypto.subtle.digest('SHA-256',enc.encode(BK_KEYS[v]));BKK[v]=await crypto.subtle.importKey('raw',h,{name:'AES-GCM'},false,['encrypt','decrypt'])}return BKK[v]}
+async function encryptBackup(txt){const iv=crypto.getRandomValues(new Uint8Array(12)),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},await appKey(BK_CUR),enc.encode(txt));return JSON.stringify({tides:1,v:BK_CUR,iv:b64(iv),ct:b64(ct)})}
+async function decryptBackup(o){return dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},await appKey(+o.v),unb64(o.ct)))}
+// clean up the short-lived v39 password build: drop flag + stored key
+if(S.settings&&'bkPw'in S.settings){delete S.settings.bkPw;save()}try{indexedDB.deleteDatabase('tides-kv')}catch(e){}
 function dlgEl(id){let d=$('#'+id);if(!d){d=document.createElement('dialog');d.id=id;document.body.appendChild(d)}return d}
-window.pwDlg=(then)=>{const d=dlgEl('pwDlg');window._pwThen=then||null;
- d.innerHTML=`<h3 style="margin:0 0 6px">Backup password</h3><p class="muted" style="font-size:13px;margin:0 0 10px">Encrypts your backup file. Stored only on this phone.</p>
- <input id="pw1" type="password" autocomplete="new-password" placeholder="Password"><input id="pw2" type="password" autocomplete="new-password" placeholder="Repeat password" style="margin-top:8px">
- <label style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" style="width:auto" onchange="['pw1','pw2'].forEach(i=>$('#'+i).type=this.checked?'text':'password')"> Show</label>
- <p style="color:#FFD166;font-size:13px;margin:10px 0 0">⚠ If you forget this password, your backups can't be restored. There is no reset.${S.settings.bkPw?' Older backups still need the old password.':''}</p>
- <div id="pwErr" style="color:var(--bad);font-size:13px;min-height:18px;margin-top:6px"></div>
- <div class="row" style="gap:10px;justify-content:flex-end"><button class="btn ghost" onclick="$('#pwDlg').close()">Cancel</button><button class="btn" id="pwSave" onclick="pwSave()">Save</button></div>`;d.showModal()};
-window.pwSave=async()=>{const a=$('#pw1').value,b=$('#pw2').value,er=$('#pwErr');if(a.length<4){er.textContent='Use at least 4 characters.';return}if(a!==b){er.textContent="Passwords don't match.";return}
- $('#pwSave').disabled=true;er.textContent='Saving…';const salt=crypto.getRandomValues(new Uint8Array(16)),key=await deriveKey(a,salt,['encrypt']);BKMEM={key,salt};
- try{await kvSet('backup',BKMEM)}catch(e){er.textContent='Could not store key on this device.';$('#pwSave').disabled=false;return}
- S.settings.bkPw=true;save();$('#pwDlg').close();if(['settings','data'].includes(tab))render();toast('Backup password set');
- if(window._pwThen){const t=window._pwThen;window._pwThen=null;t()}};
-async function backupFile(){const c=await encryptBackup(backupText());return c?new File([c],BK_NAME,{type:'application/octet-stream'}):null}
+async function backupFile(){return new File([await encryptBackup(backupText())],BK_NAME,{type:'application/octet-stream'})}
 function bkReady(f){const d=dlgEl('bkReady');d.innerHTML=`<h3 style="margin:0 0 6px">Backup ready</h3><p class="muted" style="margin:0 0 12px">Encrypted file “tides”.</p><div class="row" style="gap:10px;justify-content:flex-end"><button class="btn ghost" onclick="$('#bkReady').close()">Cancel</button><button class="btn" id="bkGo">Save</button></div>`;
  d.querySelector('#bkGo').onclick=()=>{d.close();shareFile(f,true)};d.showModal()}
 function bkMark(){S.settings.lastBackup=Date.now();save();if(tab==='data')render();toast('Backup saved')}
 async function shareFile(f,retried){if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'Tides backup'});bkMark();return}
   catch(e){if(e&&e.name==='AbortError')return;if(e&&e.name==='NotAllowedError'&&!retried){bkReady(f);return}}}
  const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=BK_NAME;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);bkMark()}
-window.saveBackup=async()=>{if(!S.settings.bkPw||!(await bkKey())){S.settings.bkPw=false;pwDlg(async()=>{const f=await backupFile();if(f)bkReady(f)});return}
- const f=await backupFile();if(!f){toast('Set a backup password first');return}shareFile(f)};
-function restoreData(d){if(!d||!Array.isArray(d.peptides))throw new Error('bad');if(!confirm('Replace current data with imported file?'))return;
- const keep={bkPw:S.settings.bkPw};S={peptides:d.peptides,protocols:d.protocols||[],logs:d.logs||[],settings:Object.assign(d.settings||{},keep)};save();render();toast('Imported')}
-function askPw(){return new Promise(ok=>{const d=dlgEl('pwAsk');d.innerHTML=`<h3 style="margin:0 0 6px">Encrypted backup</h3><p class="muted" style="font-size:13px;margin:0 0 10px">Enter the backup password.</p>
- <input id="pwA" type="password" autocomplete="current-password" placeholder="Password"><div id="pwAErr" style="color:var(--bad);font-size:13px;min-height:18px;margin-top:6px"></div>
- <div class="row" style="gap:10px;justify-content:flex-end"><button class="btn ghost" id="pwAc">Cancel</button><button class="btn" id="pwAo">Unlock</button></div>`;
- d.querySelector('#pwAc').onclick=()=>{d.close();ok(null)};d.querySelector('#pwAo').onclick=()=>ok(d);d.querySelector('#pwA').onkeydown=e=>{if(e.key==='Enter')ok(d)};d.showModal();setTimeout(()=>$('#pwA').focus(),50)})}
-window.importJSON=async inp=>{const f=inp.files[0];inp.value='';if(!f)return;let o;try{o=JSON.parse(await f.text())}catch(e){alert("That file isn't a Tides backup.");return}
- if(o&&o.ct&&o.salt&&o.iv){const d=await askPw();if(!d)return;const er=d.querySelector('#pwAErr'),bt=d.querySelector('#pwAo'),inpw=d.querySelector('#pwA');
-  for(;;){er.textContent='Unlocking…';bt.disabled=true;let txt=null;try{txt=await decryptBackup(o,inpw.value)}catch(e){}
-   if(txt!=null){d.close();try{restoreData(JSON.parse(txt))}catch(e){alert("That file isn't a Tides backup.")}return}
-   bt.disabled=false;er.textContent='Wrong password. Try again.';inpw.select();
-   const go=await new Promise(r=>{bt.onclick=()=>r(true);inpw.onkeydown=e=>{if(e.key==='Enter')r(true)};d.querySelector('#pwAc').onclick=()=>{d.close();r(false)}});if(!go)return}}
- try{restoreData(o)}catch(e){alert("That file isn't a Tides backup.")}};
+window.saveBackup=async()=>shareFile(await backupFile());
+function restoreData(d){if(!d||!Array.isArray(d.peptides))throw new Error('bad');const snap=JSON.stringify(S);
+ S={peptides:d.peptides,protocols:d.protocols||[],logs:d.logs||[],settings:d.settings||{}};delete S.settings.bkPw;save();render();undoBar('Backup restored',()=>{S=JSON.parse(snap);save();render()})}
+window.importJSON=async inp=>{const f=inp.files[0];inp.value='';if(!f)return;const bad=()=>alert("That file isn't a Tides backup.");let o;try{o=JSON.parse(await f.text())}catch(e){bad();return}
+ if(o&&o.ct&&o.iv){if(!BK_KEYS[+o.v]){alert("This backup was made with an older test build and can't be opened. Make a new backup.");return}let t;try{t=await decryptBackup(o)}catch(e){bad();return}try{restoreData(JSON.parse(t))}catch(e){bad()}return}
+ try{restoreData(o)}catch(e){bad()}};
