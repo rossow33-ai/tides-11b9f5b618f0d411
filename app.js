@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='40';
+const APP_VERSION='41';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -303,6 +303,7 @@ function applyOrder(key){const o=ORDERS[key];S.settings.imports=S.settings.impor
  S.settings.imports[key]=new Date().toISOString();save();return[np,nv]}
 window.applyOrder=applyOrder;
 function handleAddHash(){const m=location.hash.match(/^#add=(.+)$/);if(!m)return;
+ if(m[1]==='plan-update-20261022-reta1'){history.replaceState(null,'',location.pathname);setTimeout(()=>applyReta1(m[1]),0);return}
  if(m[1]==='plan-update-20261011'||m[1]==='plan-update-20261011b'){history.replaceState(null,'',location.pathname);setTimeout(()=>m[1].endsWith('b')?applyRetaB(m[1]):applyPlanUpdate(m[1]),0);return}
  if(ORDERS[m[1]]){const r=applyOrder(m[1]);window.history.replaceState(null,'',location.pathname);tab='inventory';render();toast(r?`Order added: ${r[1]} sealed vials${r[0]?`, ${r[0]} new peptides`:''}`:'Order already imported');return}if(m[1]==='suggested'){const[np,nr]=mergeAdd({protocols:sgProtocols()});history.replaceState(null,'',location.pathname);tab='suggested';render();toast(nr?`Added ${nr} paused protocols${np?`, ${np} peptides`:''}`:'Suggested schedule already added');return}try{let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
  const data=JSON.parse(decodeURIComponent(escape(atob(b))));const[np,nr]=mergeAdd(data);history.replaceState(null,'',location.pathname);tab='suggested';render();toast(`Imported ${np} peptides, ${nr} protocols (paused)`)}catch(e){console.warn('bad #add link',e)}}
@@ -516,7 +517,7 @@ for(const fn of ['quickLog','dsSave','unlog']){const o=window[fn];window[fn]=(..
 
 // ---- v32 Tom's personal dosing defaults (override Reference/suggested)
 const USER_DEFAULTS={'ss-31':{slot:'AM',days:[0,1,2,3,4,5,6],phases:[{w:[1,8],mcg:2000}],note:'Your setting: 2 mg daily, flat (no titration).'},
- 'retatrutide':{anchor:true,phases:[{w:[1,1],mcg:1000},{w:[2,5],mcg:2000},{w:[6,12],mcg:4000}],note:'Your setting: 1 mg week 1 only, then the site\'s steps: 2 mg weeks 2–5, 4 mg from week 6. Weekly on the weekday of the first dose.'}};
+ 'retatrutide':{anchor:true,phases:[{w:[1,12],mcg:1000}],note:'Your setting: 1 mg weekly, held (no titration). Weekly on the weekday of the first dose.'}};
 (SG().items||[]).forEach(it=>{const u=USER_DEFAULTS[it.name.toLowerCase()]||USER_DEFAULTS[(it.alias||'').toLowerCase()];if(!u)return;it.phases=u.phases;if(u.days)it.days=u.days;if(u.slot)it.slot=u.slot;it.user=u;it.site=u.note+' Site: '+it.site;it.why=(u.slot?'Your setting: '+u.slot+'. ':'')+it.why});
 function applyPlanUpdate(key){S.settings.imports=S.settings.imports||{};if(S.settings.imports[key]){tab='list';render();toast('Plan update already applied');return}
  const out=[];['SS-31','Retatrutide'].forEach(n=>{const p=S.peptides.find(x=>x.name.toLowerCase()===n.toLowerCase()||(n==='Retatrutide'&&/glp-?3/i.test(x.name)));if(!p)return;
@@ -745,3 +746,14 @@ function restoreData(d){if(!d||!Array.isArray(d.peptides))throw new Error('bad')
 window.importJSON=async inp=>{const f=inp.files[0];inp.value='';if(!f)return;const bad=()=>alert("That file isn't a Tides backup.");let o;try{o=JSON.parse(await f.text())}catch(e){bad();return}
  if(o&&o.ct&&o.iv){if(!BK_KEYS[+o.v]){alert("This backup was made with an older test build and can't be opened. Make a new backup.");return}let t;try{t=await decryptBackup(o)}catch(e){bad();return}try{restoreData(JSON.parse(t))}catch(e){bad()}return}
  try{restoreData(o)}catch(e){bad()}};
+
+// ---- v41 Retatrutide hold at 1 mg weekly (link #add=plan-update-20261022-reta1). Never touches logs.
+function applyReta1(key){S.settings.imports=S.settings.imports||{};const done=()=>{tab='pdetail';DP=p&&p.id;render()};
+ const p=S.peptides.find(x=>/retatrutide|glp-?3/i.test(x.name));if(!p){toast('No Retatrutide found');return}
+ if(S.settings.imports[key]){DP=p.id;tab='pdetail';render();toast('Retatrutide 1 mg hold already applied');return}
+ const mine=S.protocols.filter(r=>r.peptideId===p.id),act=mine.filter(r=>r.active!==false),use=act.length?act:mine;if(!use.length){toast('No Retatrutide plan to update');return}
+ const srt=use.slice().sort((a,b)=>(a.start||'').localeCompare(b.start||'')),first=srt[0],start=first.start||ymd(new Date());
+ const dow=first.freq==='weekdays'&&(first.weekdays||[]).length?first.weekdays[0]:parseD(start).getDay();
+ S.protocols=S.protocols.filter(r=>!use.includes(r));
+ S.protocols.push({id:first.id,peptideId:p.id,doseMcg:1000,time:first.time||'08:00',freq:'weekdays',weekdays:[dow],timesPerWeek:1,everyN:1,cycleOn:0,cycleOff:0,start,end:'',active:act.length>0,note:'Your setting: hold 1 mg weekly (no 2 mg / 4 mg steps)'});
+ S.settings.imports[key]=new Date().toISOString();save();DP=p.id;tab='pdetail';render();scrollTo(0,0);toast(`Retatrutide: 1 mg every ${DOW[dow]}, ongoing`)}
