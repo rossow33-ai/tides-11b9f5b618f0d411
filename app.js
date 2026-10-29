@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='41';
+const APP_VERSION='42';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -219,6 +219,7 @@ if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=
 function BAC(){return +(S.settings&&S.settings.defaultBac)||2}
 // Per-peptide BAC default: large vials (>=100 mg, e.g. NAD+) use the site's mix volume when larger than the global default, else 5 mL; normal peptides use the global default (2 mL).
 function bacInfo(name,mg){const i=refFind(name);let e=null;if(i>=0){const es=REF()[i].entries;e=es.find(x=>+x.vialMg===+mg)||(mg==null?es[0]:null)}
+ if(e&&e.bacMl)return{ml:+e.bacMl,src:'site',url:e.url};
  const m=e&&(e.recon||[]).join(' ').match(/with\s+([\d.]+)\s*mL/i),site=m?+m[1]:null,g=BAC();
  if(+mg>=100){if(site&&site>g)return{ml:site,src:'site',url:e.url};if(!site)return{ml:Math.max(5,g),src:'default'}}return{ml:g,src:'global'}}
 function bacFor(name,mg){return bacInfo(name,mg).ml}
@@ -230,10 +231,10 @@ function refFind(name){if(!name)return-1;const n=name.toLowerCase();return REF()
 function refTable(g,bac0){const B=e=>bac0||bacFor(g.name,e.vialMg);const bac=bacFor(g.name,(g.entries.find(x=>x.vialMg)||{}).vialMg);return`<table class="ref"><tr><th>Vial</th><th>BAC · conc</th><th>Dose range</th><th>Units (U-100)</th><th>Freq</th><th>Site's mix</th></tr>
  ${g.entries.map(e=>{const a=u100(e.vialMg,e.minMcg,B(e)),b=u100(e.vialMg,e.maxMcg,B(e));return`<tr><td>${esc(e.vialLabel||(e.vialMg?fmt(e.vialMg)+' mg':'—'))}</td>
  <td>${e.vialMg?fmt(B(e),2)+' mL · '+fmt(e.vialMg/B(e),3)+' mg/mL':'—'}</td><td>${esc(e.doseRange)}</td>
- <td>${a==null?'<span class="muted">n/a</span>':`<b style="color:${(b||a)>100?'var(--bad)':'var(--ac)'}">${fmt(a,1)}${b!==a?'–'+fmt(b,1):''}</b>${(b||a)>100?'<br><span class="muted" style="font-size:10px">&gt;100u: 2 draws</span>':''}`}</td><td>${esc(e.freq)}</td><td class="muted">${esc(e.siteConc)} <a href="${esc(e.url)}" target="_blank" rel="noopener">src</a></td></tr>`}).join('')}</table>`}
+ <td>${a==null?'<span class="muted">n/a</span>':`<b style="color:${(b||a)>100?'var(--bad)':'var(--ac)'}">${fmt(a,1)}${b!==a?'–'+fmt(b,1):''}</b>${(b||a)>100?'<br><span class="muted" style="font-size:10px">&gt;100u: 2 draws</span>':''}`}</td><td>${esc(e.freq)}</td><td class="muted">${e.derived?'<b>derived</b> · ':''}${esc(e.siteConc)} <a href="${esc(e.url)}" target="_blank" rel="noopener">src</a></td></tr>`}).join('')}</table>`}
 function refCard(g,i,full){const e0=g.entries[0];return`<div class="card"><div class="row"><h3 class="sp">${esc(g.name)} <span class="pill">${esc(g.type)}</span></h3>
  <button class="btn sm" onclick="refAdd(${i})">+ Add to library</button></div>
- <div class="muted">Dose range: ${[...new Set(g.entries.map(e=>e.doseRange))].map(esc).join(' / ')} · ${[...new Set(g.entries.map(e=>e.freq))].map(esc).join(' / ')}</div>
+ ${g.derivedNote?`<div class="ex" style="border-color:var(--warn,#e8b04a)"><b>Not on peptidedosages.com.</b> ${esc(g.derivedNote.replace(/^Not listed on peptidedosages.com\.\s*/,''))}</div>`:''}<div class="muted">Dose range: ${[...new Set(g.entries.map(e=>e.doseRange))].map(esc).join(' / ')} · ${[...new Set(g.entries.map(e=>e.freq))].map(esc).join(' / ')}</div>
  <details><summary>Units per vial size & notes</summary><div style="overflow-x:auto;margin-top:6px">${refTable(g)}</div>
  ${full!==false?[...new Set(g.entries.flatMap(e=>e.cycle||[]))].slice(0,2).map(c=>`<div class="ex">Cycle: “${esc(c)}”</div>`).join('')+[...new Set(g.entries.flatMap(e=>e.recon||[]))].slice(0,1).map(c=>`<div class="ex">Site reconstitution: “${esc(c)}”</div>`).join(''):''}</details>
  <div class="muted" style="margin-top:6px">Source: <a href="${esc(e0.url)}" target="_blank" rel="noopener">peptidedosages.com</a> · Units use ${fmt(BAC())} mL BAC water, or the site's larger mix volume where it uses more (e.g. NAD+). Not medical advice.</div></div>`}
@@ -303,6 +304,7 @@ function applyOrder(key){const o=ORDERS[key];S.settings.imports=S.settings.impor
  S.settings.imports[key]=new Date().toISOString();save();return[np,nv]}
 window.applyOrder=applyOrder;
 function handleAddHash(){const m=location.hash.match(/^#add=(.+)$/);if(!m)return;
+ if(m[1]==='mitostack-20261029'){history.replaceState(null,'',location.pathname);setTimeout(()=>applyMito(m[1]),0);return}
  if(m[1]==='plan-update-20261022-reta1'){history.replaceState(null,'',location.pathname);setTimeout(()=>applyReta1(m[1]),0);return}
  if(m[1]==='plan-update-20261011'||m[1]==='plan-update-20261011b'){history.replaceState(null,'',location.pathname);setTimeout(()=>m[1].endsWith('b')?applyRetaB(m[1]):applyPlanUpdate(m[1]),0);return}
  if(ORDERS[m[1]]){const r=applyOrder(m[1]);window.history.replaceState(null,'',location.pathname);tab='inventory';render();toast(r?`Order added: ${r[1]} sealed vials${r[0]?`, ${r[0]} new peptides`:''}`:'Order already imported');return}if(m[1]==='suggested'){const[np,nr]=mergeAdd({protocols:sgProtocols()});history.replaceState(null,'',location.pathname);tab='suggested';render();toast(nr?`Added ${nr} paused protocols${np?`, ${np} peptides`:''}`:'Suggested schedule already added');return}try{let b=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
@@ -357,7 +359,7 @@ function undoBar(msg,fn){let u=$('#undoBar');if(!u){u=document.createElement('di
 const SLOT_RULES=[[/tesamorelin|cjc|ipamorelin|sermorelin|ghrp|hexarelin|mk-?677|ghrh|modgrf/i,'PM','GH secretagogue: bedtime on an empty stomach (common convention)'],
  [/melanotan|\bmt-?2\b|\bmt-?ii\b/i,'PM','Common convention: evening dosing to sleep through nausea/flushing; the site says any consistent time'],
  [/semaglutide|tirzepatide|retatrutide|glp|cagrilintide|liraglutide|survodutide|mazdutide/i,'AM','GLP-1 type: weekly, morning (app default)'],
- [/nad|ss-?31|mots/i,'AM','Energy/mitochondrial: morning (app default)'],[/bpc|tb-?500|thymosin beta|wolverine/i,'AM','Healing peptide: morning (app default)'],[/pt-?141|bremelanotide/i,'PM','Evening (app default)']];
+ [/nad|ss-?31|mots|mito/i,'AM','Energy/mitochondrial: morning (app default)'],[/bpc|tb-?500|thymosin beta|wolverine/i,'AM','Healing peptide: morning (app default)'],[/pt-?141|bremelanotide/i,'PM','Evening (app default)']];
 function slotFor(name){const i=refFind(name);if(i>=0){const t=JSON.stringify(REF()[i]);if(/\b(at bedtime|before bed(time)?)\b/i.test(t))return{slot:'PM',src:'site',why:'Site: "at bedtime"'};if(/\bin the morning\b/i.test(t)&&!/evening/i.test(t))return{slot:'AM',src:'site',why:'Site: "in the morning"'}}
  for(const[re,sl,why]of SLOT_RULES)if(re.test(name))return{slot:sl,src:'app default',why};return{slot:'AM',src:'app default',why:'No timing guidance; morning default'}}
 function sgItem(name){const n=(name||'').toLowerCase();return(SG().items||[]).find(it=>it.name.toLowerCase()===n||(it.alias||'').toLowerCase()===n)}
@@ -757,3 +759,10 @@ function applyReta1(key){S.settings.imports=S.settings.imports||{};const done=()
  S.protocols=S.protocols.filter(r=>!use.includes(r));
  S.protocols.push({id:first.id,peptideId:p.id,doseMcg:1000,time:first.time||'08:00',freq:'weekdays',weekdays:[dow],timesPerWeek:1,everyN:1,cycleOn:0,cycleOff:0,start,end:'',active:act.length>0,note:'Your setting: hold 1 mg weekly (no 2 mg / 4 mg steps)'});
  S.settings.imports[key]=new Date().toISOString();save();DP=p.id;tab='pdetail';render();scrollTo(0,0);toast(`Retatrutide: 1 mg every ${DOW[dow]}, ongoing`)}
+
+// ---- v42 MitoStack (Peptide Plugs, 50 mg = 25 mg SS-31 + 25 mg MOTS-c). Merge-only + idempotent: peptide matched by name, protocol by fixed id.
+function applyMito(key){const had=S.peptides.some(x=>/^mitostack$/i.test(x.name))&&S.protocols.some(r=>r.id==='ms-20261029-1');
+ const[np,nr]=mergeAdd({peptides:[{name:'MitoStack',vialMg:50,bacMl:3,vials:1,remainingMg:0,reorderAt:1,notes:'Peptide Plugs MITOSTACK 50 mg = 25 mg SS-31 + 25 mg MOTS-c (1:1). Not on peptidedosages.com: dose derived from its MOTS-C steps (blend = 2×). Contains SS-31, so it adds to your separate SS-31.'}],
+  protocols:[{id:'ms-20261029-1',peptideName:'MitoStack',doseMcg:400,time:'08:00',freq:'daily',weekdays:[],timesPerWeek:1,everyN:1,cycleOn:0,cycleOff:0,start:ymd(new Date()),end:'',active:false,note:'Start 400 mcg blend (200 mcg SS-31 + 200 mcg MOTS-c). MOTS-C steps on peptidedosages.com every 2 wk ×2 for the blend: 400 → 800 → 1,200 → 1,600 → 2,000 mcg. Paused until you start it.'}]});
+ const p=S.peptides.find(x=>/^mitostack$/i.test(x.name));if(p)DP=p.id;tab='pdetail';render();scrollTo(0,0);
+ toast(np||nr?`MitoStack added: 50 mg vial, 3 mL BAC, 400 mcg AM (paused)`:'MitoStack already added')}
