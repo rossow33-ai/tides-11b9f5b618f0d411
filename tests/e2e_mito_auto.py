@@ -36,4 +36,10 @@ with sync_playwright() as p:
     # fresh + hash together -> single add
     pg.evaluate(SEED);pg.goto(U+'#add=mitostack-20261029');pg.wait_for_timeout(900)
     print('HASH+AUTO single:',pg.evaluate(MS))
+    # v45: existing 3 mL MitoStack: unmixed -> 2 mL, mixed -> untouched
+    ADD="S.peptides.push({id:'m',name:'MitoStack',vialMg:50,bacMl:3,vials:1,remainingMg:%s,reorderAt:1,expiryDays:28,reconDate:'%s',notes:''});S.protocols.push({id:'ms-20261029-1',peptideId:'m',doseMcg:400,time:'08:00',freq:'daily',start:'2026-10-29',active:false});S.settings.imports['auto-mitostack-20261029']='x';save()"
+    pg.evaluate(SEED);pg.evaluate(ADD%(0,''));pg.reload();pg.wait_for_timeout(400)
+    print('UNMIXED 3->2:',pg.evaluate("S.peptides.find(p=>p.name==='MitoStack').bacMl"),'| others untouched:',pg.evaluate(N)==s0)
+    pg.evaluate(SEED);pg.evaluate(ADD%(50,'2026-10-29'));pg.reload();pg.wait_for_timeout(400)
+    print('MIXED stays 3:',pg.evaluate("S.peptides.find(p=>p.name==='MitoStack').bacMl"))
     print('errors',errs);b.close()
