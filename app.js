@@ -210,7 +210,7 @@ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.datase
 window.addEventListener('load',()=>{try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}render();if(tab==='peptides')qcalc()});
 render();
 const _r=render;render=function(){_r();if(tab==='peptides'){qcalc();S.peptides.forEach(p=>{const i=document.querySelector(`#cr_${p.id}`)?.closest('.calc').querySelector('input');if(i)calc(i,p.id)})}};
-const APP_VERSION='42';
+const APP_VERSION='43';
 if('serviceWorker'in navigator&&location.protocol.startsWith('http')){const had=!!navigator.serviceWorker.controller;let reloading=false;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had||reloading)return;reloading=true;location.reload()});
  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{reg.update();document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update()})}).catch(()=>{})}
@@ -761,8 +761,17 @@ function applyReta1(key){S.settings.imports=S.settings.imports||{};const done=()
  S.settings.imports[key]=new Date().toISOString();save();DP=p.id;tab='pdetail';render();scrollTo(0,0);toast(`Retatrutide: 1 mg every ${DOW[dow]}, ongoing`)}
 
 // ---- v42 MitoStack (Peptide Plugs, 50 mg = 25 mg SS-31 + 25 mg MOTS-c). Merge-only + idempotent: peptide matched by name, protocol by fixed id.
+function mitoData(){return {peptides:[{name:'MitoStack',vialMg:50,bacMl:3,vials:1,remainingMg:0,reorderAt:1,notes:'Peptide Plugs MITOSTACK 50 mg = 25 mg SS-31 + 25 mg MOTS-c (1:1). Not on peptidedosages.com: dose derived from its MOTS-C steps (blend = 2×). Contains SS-31, so it adds to your separate SS-31.'}],
+  protocols:[{id:'ms-20261029-1',peptideName:'MitoStack',doseMcg:400,time:'08:00',freq:'daily',weekdays:[],timesPerWeek:1,everyN:1,cycleOn:0,cycleOff:0,start:ymd(new Date()),end:'',active:false,note:'Start 400 mcg blend (200 mcg SS-31 + 200 mcg MOTS-c). MOTS-C steps on peptidedosages.com every 2 wk ×2 for the blend: 400 → 800 → 1,200 → 1,600 → 2,000 mcg. Paused until you start it.'}]}}
 function applyMito(key){const had=S.peptides.some(x=>/^mitostack$/i.test(x.name))&&S.protocols.some(r=>r.id==='ms-20261029-1');
- const[np,nr]=mergeAdd({peptides:[{name:'MitoStack',vialMg:50,bacMl:3,vials:1,remainingMg:0,reorderAt:1,notes:'Peptide Plugs MITOSTACK 50 mg = 25 mg SS-31 + 25 mg MOTS-c (1:1). Not on peptidedosages.com: dose derived from its MOTS-C steps (blend = 2×). Contains SS-31, so it adds to your separate SS-31.'}],
-  protocols:[{id:'ms-20261029-1',peptideName:'MitoStack',doseMcg:400,time:'08:00',freq:'daily',weekdays:[],timesPerWeek:1,everyN:1,cycleOn:0,cycleOff:0,start:ymd(new Date()),end:'',active:false,note:'Start 400 mcg blend (200 mcg SS-31 + 200 mcg MOTS-c). MOTS-C steps on peptidedosages.com every 2 wk ×2 for the blend: 400 → 800 → 1,200 → 1,600 → 2,000 mcg. Paused until you start it.'}]});
+ const[np,nr]=mergeAdd(mitoData());
  const p=S.peptides.find(x=>/^mitostack$/i.test(x.name));if(p)DP=p.id;tab='pdetail';render();scrollTo(0,0);
  toast(np||nr?`MitoStack added: 50 mg vial, 3 mL BAC, 400 mcg AM (paused)`:'MitoStack already added')}
+
+// ---- v43 auto-apply MitoStack once on launch (same merge-only logic as #add=mitostack-20261029). Silent if already present; stays on current tab.
+function autoMito(){try{S.settings=S.settings||{};S.settings.imports=S.settings.imports||{};const k='auto-mitostack-20261029';if(S.settings.imports[k])return;
+ const had=S.peptides.some(x=>/^mitostack$/i.test(x.name))&&S.protocols.some(r=>r.id==='ms-20261029-1');
+ let np=0,nr=0;if(!had)[np,nr]=mergeAdd(mitoData());
+ S.settings.imports[k]=new Date().toISOString();save();
+ if(np||nr){render();toast('MitoStack added')}}catch(e){console.warn('autoMito',e)}}
+setTimeout(autoMito,50);
